@@ -1,0 +1,109 @@
+# 🤖 自驱型多 Agent 自动化数据分析平台
+
+基于 **LangGraph** 的生产级多智能体数据分析平台，支持用户通过自然语言完成数据上传、探索分析、代码生成、图表展示与报告输出。
+
+## 架构概览
+
+```
+┌─────────────────────────────────────────────────────┐
+│                    用户界面 (Streamlit)                │
+└──────────────────────┬──────────────────────────────┘
+                       │
+┌──────────────────────▼──────────────────────────────┐
+│              Coordinator (调度中心)                    │
+│         意图识别 → 任务分类 → Agent 路由              │
+└──┬───────┬────────┬─────────┬──────────┬────────────┘
+   │       │        │         │          │
+   ▼       ▼        ▼         ▼          ▼
+ Data    Data    Code Gen  Visualizer  Report
+ Parser  Profiler  erator              Writer
+   │       │        │         │          │
+   └───────┴────────┴─────────┴──────────┘
+                    │
+           ┌───────▼────────┐
+           │  Code Sandbox   │
+           │  (安全执行环境)   │
+           └────────────────┘
+```
+
+## 技术栈
+
+| 组件 | 技术选型 |
+|------|---------|
+| Agent 编排 | LangGraph StateGraph + langgraph-supervisor |
+| LLM | DeepSeek V3 (via langchain-deepseek) |
+| 状态管理 | 强类型 TypedDict + Annotated reducer |
+| 数据处理 | pandas, numpy |
+| 可视化 | matplotlib, plotly, seaborn |
+| 前端 | Streamlit |
+| 测试 | pytest |
+
+## 快速开始
+
+### 1. 安装依赖
+
+```bash
+pip install -r requirements.txt
+```
+
+### 2. 配置环境变量
+
+```bash
+cp .env.example .env
+# 编辑 .env，填入你的 DEEPSEEK_API_KEY
+```
+
+### 3. 运行测试
+
+```bash
+python -m pytest tests/ -v
+```
+
+### 4. 启动命令行交互
+
+```bash
+python main.py
+```
+
+## 项目结构
+
+```
+multi-agent-data-analysis/
+├── configs/
+│   └── settings.py          # 全局配置管理
+├── src/
+│   ├── agents/              # Agent 实现
+│   │   ├── coordinator.py   # 调度中心 (意图识别+路由)
+│   │   ├── data_parser.py   # 数据解析专家
+│   │   └── chat.py          # 普通对话 + 占位 Agent
+│   ├── graph/               # LangGraph 图定义
+│   │   ├── state.py         # 全局 AnalysisState (TypedDict)
+│   │   └── builder.py       # StateGraph 构建与编译
+│   ├── skills/              # Skill 注册与管理 (阶段2)
+│   ├── tools/               # 工具函数
+│   ├── sandbox/             # 代码安全执行环境 (阶段2)
+│   ├── memory/              # 记忆系统 (阶段4)
+│   └── utils/
+│       └── llm.py           # LLM 客户端封装
+├── tests/                   # 测试套件
+│   ├── conftest.py
+│   ├── test_state.py
+│   ├── test_data_parser.py
+│   └── test_graph_build.py
+├── data/
+│   └── sample/              # 示例数据
+├── main.py                  # 命令行入口
+├── requirements.txt
+└── .env.example
+```
+
+## 开发路线
+
+- [x] **阶段 1**: 项目骨架 — State 定义、Coordinator、DataParser、Graph 组装、测试
+- [ ] **阶段 2**: 核心 Agent — DataProfiler、CodeGenerator、代码沙箱、Skill 体系
+- [ ] **阶段 3**: 可视化 + 报告 — Streamlit 前端、图表渲染、ReportWriter
+- [ ] **阶段 4**: 生产化 — 持久化、HITL、记忆系统、错误恢复
+
+## License
+
+MIT
