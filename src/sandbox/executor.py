@@ -208,15 +208,19 @@ def execute_code(
         logger.info(f"沙箱执行开始 [id={exec_id}, timeout={timeout}s]")
 
         result = subprocess.run(
-            [sys.executable, script_path],
+            [sys.executable, "-X", "utf8", script_path],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=timeout,
             cwd=str(settings.DATA_DIR),
             env={
                 **os.environ,
-                "PYTHONHASHSEED": "0",  # 确保可复现
-                "MPLBACKEND": "Agg",    # 非交互式后端
+                "PYTHONHASHSEED": "0",       # 确保可复现
+                "MPLBACKEND": "Agg",          # 非交互式后端
+                "PYTHONIOENCODING": "utf-8",   # 子进程 stdin/stdout/stderr 编码
+                "PYTHONUTF8": "1",            # Python UTF-8 模式 (3.7+)
             },
         )
 
