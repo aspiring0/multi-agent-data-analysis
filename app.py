@@ -326,7 +326,7 @@ with panel_col:
                 mime="text/markdown",
             )
         else:
-            st.caption("输入"生成报告"后将在此显示")
+            st.caption("输入'生成报告'后将在此显示")
 
     # 数据预览
     if session["datasets"]:
