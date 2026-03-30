@@ -245,3 +245,41 @@ def _extract_file_path(state: AnalysisState) -> str | None:
             return str(files[0])
 
     return None
+
+
+# ============================================================
+# 公开接口（供 app.py 等外部模块直接调用）
+# ============================================================
+
+def load_dataframe(file_path: str) -> tuple[pd.DataFrame | None, str | None]:
+    """
+    加载数据文件为 DataFrame。
+
+    Returns:
+        (df, None) 成功时
+        (None, error_msg) 失败时
+    """
+    try:
+        df = _load_dataframe(file_path)
+        return df, None
+    except Exception as e:
+        return None, str(e)
+
+
+def build_dataset_meta(
+    df: pd.DataFrame,
+    file_name: str,
+    file_path: str,
+) -> DatasetMeta:
+    """
+    从 DataFrame 构建 DatasetMeta。
+
+    Args:
+        df: 已加载的 DataFrame
+        file_name: 原始文件名
+        file_path: 文件存储路径
+    """
+    meta = _build_dataset_meta(df, file_path)
+    # 确保 file_name 使用传入的名称（而不是路径推导的）
+    meta["file_name"] = file_name
+    return meta
