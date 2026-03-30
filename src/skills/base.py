@@ -1,12 +1,22 @@
 """
-Skill 基类和注册体系
-把每个分析能力封装为可注册、可版本化、可路由的 Skill 单元。
+Skill 基类和注册体系（v2 — 兼容 Agent Skills 规范）
 
-设计思路（参考 LangGraph 社区 Agent Skill 模式）：
-1. 每个 Skill 是一个带有元信息的可调用单元
-2. Skill Registry 负责注册、查找和路由
-3. Coordinator 通过 Registry 查询可用 Skill 来增强路由决策
-4. 支持版本管理，方便 A/B 测试和回滚
+支持两种 Skill 格式：
+1. SKILL.md 格式（行业标准）：
+   - 每个 Skill 是一个目录，包含 SKILL.md + 可选附件
+   - SKILL.md 使用 YAML frontmatter + Markdown 正文
+   - 兼容 langchain-skills / Claude Code / Deep Agents 等生态
+   - 可从 GitHub 下载社区 Skill
+
+2. 代码 Skill 格式（内置）：
+   - Python 函数生成分析代码模板
+   - 适用于内置的数据分析能力
+
+设计思路（对齐 LangChain Agent Skills 规范）：
+- Progressive Disclosure：注册时只加载元信息（name + description），
+  实际指令在需要时才读取 SKILL.md 完整内容
+- 可注册/可版本化/可搜索/可从 GitHub 加载
+- Coordinator 通过 Registry 查询可用 Skill 来增强路由决策
 
 Skill 分类：
 - analysis: 数据分析类（统计、分布、相关性）
@@ -17,8 +27,10 @@ Skill 分类：
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
 from typing import Any, Callable
 
 logger = logging.getLogger(__name__)
@@ -49,6 +61,9 @@ class SkillMeta:
     output_description: str = ""       # 输出说明
     code_template: str = ""            # 代码模板（供 CodeGenerator 参考）
     examples: list[str] = field(default_factory=list)  # 使用示例
+    # SKILL.md 格式相关
+    skill_dir: str = ""               # Skill 目录路径（SKILL.md 所在目录）
+    source: str = "builtin"           # 来源：builtin / local / github
 
 
 @dataclass
@@ -65,11 +80,50 @@ class Skill:
     # 直接执行函数（某些 Skill 不需要生成代码，直接返回结果）
     execute: Callable[..., dict[str, Any]] | None = None
 
+    # SKILL.md 完整内容（延迟加载 — Progressive Disclosure）
+    _full_instructions: str | None = None
+
     def __post_init__(self):
-        if self.generate_code is None and self.execute is None:
+        # SKILL.md 格式的 Skill 不需要 generate_code 或 execute
+        if (self.generate_code is None
+                and self.execute is None
+                and not self.meta.skill_dir):
             raise ValueError(
-                f"Skill '{self.meta.name}' 必须提供 generate_code 或 execute 之一"
+                f"Skill '{self.meta.name}' 必须提供 generate_code、execute 或 skill_dir 之一"
             )
+
+    @property
+    def full_instructions(self) -> str:
+        """
+        获取 Skill 的完整指令文本（Progressive Disclosure）。
+        对于 SKILL.md 格式，首次访问时从文件加载。
+        对于代码 Skill，返回描述 + 代码模板。
+        """
+        if self._full_instructions is not None:
+            return self._full_instructions
+
+        # 尝试从 SKILL.md 加载
+        if self.meta.skill_dir:
+            skill_md = Path(self.meta.skill_dir) / "SKILL.md"
+            if skill_md.exists():
+                content = skill_md.read_text(encoding="utf-8")
+                # 去掉 YAML frontmatter，只返回正文
+                if content.startswith("---"):
+                    parts = content.split("---", 2)
+                    if len(parts) >= 3:
+                        self._full_instructions = parts[2].strip()
+                    else:
+                        self._full_instructions = content
+                else:
+                    self._full_instructions = content
+                return self._full_instructions
+
+        # 代码 Skill：构造描述文本
+        parts = [f"# {self.meta.display_name}", "", self.meta.description]
+        if self.meta.code_template:
+            parts.extend(["", "## 代码模板", f"```python\n{self.meta.code_template}\n```"])
+        self._full_instructions = "\n".join(parts)
+        return self._full_instructions
 
 
 class SkillRegistry:
@@ -127,6 +181,7 @@ class SkillRegistry:
         """
         生成所有 Skill 的描述文本（供 Coordinator 使用）
         格式适合注入到 LLM 的系统提示词中。
+        只包含元信息（Progressive Disclosure），不加载完整指令。
         """
         if not self._skills:
             return "暂无已注册的 Skill。"
@@ -140,14 +195,140 @@ class SkillRegistry:
         for category, skills in sorted(by_category.items()):
             lines.append(f"### {category}")
             for s in skills:
-                lines.append(f"- **{s.display_name}** (`{s.name}`): {s.description}")
+                source_tag = f" [{s.source}]" if s.source != "builtin" else ""
+                lines.append(
+                    f"- **{s.display_name}** (`{s.name}`): "
+                    f"{s.description}{source_tag}"
+                )
             lines.append("")
 
         return "\n".join(lines)
 
+    def load_from_directory(self, skills_dir: str | Path) -> int:
+        """
+        从目录批量加载 SKILL.md 格式的 Skill。
+
+        目录结构：
+        skills_dir/
+        ├── web-research/
+        │   ├── SKILL.md
+        │   └── helper.py
+        ├── data-cleaning/
+        │   └── SKILL.md
+        └── ...
+
+        Returns:
+            加载的 Skill 数量
+        """
+        skills_dir = Path(skills_dir)
+        if not skills_dir.exists():
+            logger.warning(f"Skill 目录不存在: {skills_dir}")
+            return 0
+
+        loaded = 0
+        for skill_path in sorted(skills_dir.iterdir()):
+            if not skill_path.is_dir():
+                continue
+            skill_md = skill_path / "SKILL.md"
+            if not skill_md.exists():
+                continue
+
+            try:
+                skill = _parse_skill_md(skill_md)
+                if skill:
+                    self.register(skill)
+                    loaded += 1
+            except Exception as e:
+                logger.error(f"加载 Skill 失败 [{skill_path.name}]: {e}")
+
+        logger.info(f"从 {skills_dir} 加载了 {loaded} 个 SKILL.md Skill")
+        return loaded
+
     @property
     def count(self) -> int:
         return len(self._skills)
+
+
+def _parse_skill_md(skill_md_path: Path) -> Skill | None:
+    """
+    解析 SKILL.md 文件为 Skill 对象。
+
+    SKILL.md 格式：
+    ---
+    name: skill-name
+    description: What the skill does
+    version: 1.0.0
+    category: analysis
+    tags: [tag1, tag2]
+    ---
+    # Skill Title
+
+    Full instructions here...
+    """
+    content = skill_md_path.read_text(encoding="utf-8")
+
+    # 解析 YAML frontmatter
+    if not content.startswith("---"):
+        logger.warning(f"SKILL.md 缺少 YAML frontmatter: {skill_md_path}")
+        return None
+
+    parts = content.split("---", 2)
+    if len(parts) < 3:
+        logger.warning(f"SKILL.md frontmatter 格式错误: {skill_md_path}")
+        return None
+
+    frontmatter = parts[1].strip()
+
+    # 简单 YAML 解析（避免引入 pyyaml 依赖）
+    meta_dict: dict[str, Any] = {}
+    for line in frontmatter.split("\n"):
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if ":" in line:
+            key, _, value = line.partition(":")
+            key = key.strip()
+            value = value.strip()
+            # 处理列表格式 [a, b, c]
+            if value.startswith("[") and value.endswith("]"):
+                value = [
+                    v.strip().strip("\"'")
+                    for v in value[1:-1].split(",")
+                    if v.strip()
+                ]
+            # 处理引号
+            elif value.startswith(("'", '"')) and value.endswith(("'", '"')):
+                value = value[1:-1]
+            meta_dict[key] = value
+
+    name = meta_dict.get("name", skill_md_path.parent.name)
+    description = meta_dict.get("description", "")
+    version = meta_dict.get("version", "1.0.0")
+    category_str = meta_dict.get("category", "utility")
+    tags = meta_dict.get("tags", [])
+    if isinstance(tags, str):
+        tags = [t.strip() for t in tags.split(",")]
+
+    # 映射 category
+    try:
+        category = SkillCategory(category_str)
+    except ValueError:
+        category = SkillCategory.UTILITY
+
+    display_name = meta_dict.get("display_name", name.replace("-", " ").title())
+
+    meta = SkillMeta(
+        name=name,
+        display_name=display_name,
+        description=description,
+        category=category,
+        version=version,
+        tags=tags,
+        skill_dir=str(skill_md_path.parent),
+        source="local",
+    )
+
+    return Skill(meta=meta)
 
 
 # ============================================================

@@ -80,18 +80,12 @@ def _build_debug_context(state: AnalysisState) -> str:
 
 
 def _extract_code(content: str) -> str:
-    """从 LLM 响应中提取代码"""
-    content = content.strip()
-    if content.startswith("```"):
-        lines = content.split("\n")
-        start = 1
-        end = len(lines)
-        for i in range(len(lines) - 1, 0, -1):
-            if lines[i].strip() == "```":
-                end = i
-                break
-        content = "\n".join(lines[start:end])
-    return content.strip()
+    """
+    从 LLM 响应中提取代码。
+    复用 code_generator 中的健壮提取逻辑。
+    """
+    from src.agents.code_generator import _extract_code_from_response
+    return _extract_code_from_response(content)
 
 
 def debugger_node(state: AnalysisState) -> dict[str, Any]:

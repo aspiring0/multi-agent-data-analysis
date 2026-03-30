@@ -86,15 +86,18 @@ matplotlib.use("Agg")
 FIGURE_DIR = "{figure_dir}"
 _figure_paths = []
 
-# 猴子补丁：拦截 plt.show() 自动保存
+# 猴子补丁：拦截 plt.show() 自动保存并关闭图表
 import matplotlib.pyplot as plt
 _original_show = plt.show
 def _patched_show(*args, **kwargs):
     import uuid as _uuid
-    fig_path = os.path.join(FIGURE_DIR, f"fig_{{_uuid.uuid4().hex[:8]}}.png")
-    plt.savefig(fig_path, dpi=150, bbox_inches="tight")
-    _figure_paths.append(fig_path)
-    print(f"[FIGURE_SAVED]{{fig_path}}")
+    for _fig_num in plt.get_fignums():
+        _fig = plt.figure(_fig_num)
+        _fig_path = os.path.join(FIGURE_DIR, f"fig_{{_uuid.uuid4().hex[:8]}}.png")
+        _fig.savefig(_fig_path, dpi=150, bbox_inches="tight")
+        _figure_paths.append(_fig_path)
+        print(f"[FIGURE_SAVED]{{_fig_path}}")
+    plt.close("all")
 plt.show = _patched_show
 
 # 数据文件路径注入
@@ -126,15 +129,17 @@ elif len(_loaded_dataframes) > 1:
 {user_code}
 # ====== 用户代码结束 ======
 
-# 最后再保存所有未关闭的图表
-for _fig_num in plt.get_fignums():
-    _fig = plt.figure(_fig_num)
+# 最后保存所有未通过 plt.show() 关闭的图表
+_remaining_figs = plt.get_fignums()
+if _remaining_figs:
     import uuid as _uuid2
-    _fig_path = os.path.join(FIGURE_DIR, f"fig_{{_uuid2.uuid4().hex[:8]}}.png")
-    _fig.savefig(_fig_path, dpi=150, bbox_inches="tight")
-    _figure_paths.append(_fig_path)
-    print(f"[FIGURE_SAVED]{{_fig_path}}")
-plt.close("all")
+    for _fig_num in _remaining_figs:
+        _fig = plt.figure(_fig_num)
+        _fig_path = os.path.join(FIGURE_DIR, f"fig_{{_uuid2.uuid4().hex[:8]}}.png")
+        _fig.savefig(_fig_path, dpi=150, bbox_inches="tight")
+        _figure_paths.append(_fig_path)
+        print(f"[FIGURE_SAVED]{{_fig_path}}")
+    plt.close("all")
 '''
 
 

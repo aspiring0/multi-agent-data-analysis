@@ -84,23 +84,39 @@ def _build_dataset_info(state: AnalysisState) -> str:
 
 
 def _extract_code_from_response(content: str) -> str:
-    """从 LLM 响应中提取纯 Python 代码"""
+    """
+    从 LLM 响应中提取纯 Python 代码。
+
+    处理多种响应格式：
+    - 纯代码（无 markdown 标记）
+    - ```python ... ``` 代码块
+    - <think>...</think> + 代码块（DeepSeek）
+    - 文字说明 + 代码块 + 文字说明
+    - 多个代码块（提取最大的一个）
+    """
+    import re
+
     content = content.strip()
 
-    # 移除 markdown 代码块标记
-    if content.startswith("```"):
-        lines = content.split("\n")
-        # 去掉第一行和最后一行的 ```
-        start = 1
-        end = len(lines)
-        if lines[0].strip().startswith("```"):
-            start = 1
-        for i in range(len(lines) - 1, 0, -1):
-            if lines[i].strip() == "```":
-                end = i
-                break
-        content = "\n".join(lines[start:end])
+    # 1. 移除 DeepSeek <think>...</think> 标签
+    content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
 
+    # 2. 提取 markdown 代码块（支持 ```python 和 ``` 两种格式）
+    #    优先找 ```python 块，其次找任意 ``` 块
+    python_blocks = re.findall(
+        r"```(?:python|py)\s*\n(.*?)```", content, re.DOTALL
+    )
+    if python_blocks:
+        # 取最长的代码块（最可能是完整代码）
+        return max(python_blocks, key=len).strip()
+
+    plain_blocks = re.findall(
+        r"```\s*\n(.*?)```", content, re.DOTALL
+    )
+    if plain_blocks:
+        return max(plain_blocks, key=len).strip()
+
+    # 3. 没有代码块标记，返回原始内容（去掉前后空白）
     return content.strip()
 
 

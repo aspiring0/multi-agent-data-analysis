@@ -112,5 +112,5 @@ plt.show()
 """
         result = execute_code(code, datasets=datasets)
         assert result["success"] is True
-        assert len(result["figures"]) >= 1
+        assert len(result["figures"]) == 1  # plt.show() 保存+关闭，不应重复
         assert Path(result["figures"][0]).exists()
