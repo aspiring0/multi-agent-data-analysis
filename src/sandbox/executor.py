@@ -189,9 +189,12 @@ def execute_code(
             data_files[var_name] = ds.get("file_path", "")
 
     # 4. 生成包装后的代码
+    # 注意：Windows 路径包含\uff0c必须用 / 替换，避免生成的 .py 文件中\f 等被解释为转义符
+    figure_dir_safe = str(figure_dir).replace("\\", "/")
+    data_files_safe = {k: v.replace("\\", "/") for k, v in data_files.items()}
     wrapped_code = WRAPPER_TEMPLATE.format(
-        figure_dir=str(figure_dir),
-        data_files=repr(data_files),
+        figure_dir=figure_dir_safe,
+        data_files=repr(data_files_safe),
         user_code=code,
     )
 
