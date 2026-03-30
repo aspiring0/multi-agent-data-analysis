@@ -1,12 +1,12 @@
 """
-Graph Builder — 核心图构建器 (v2)
+Graph Builder — 核心图构建器 (v3)
 将所有 Agent Node 组装成一个完整的 LangGraph StateGraph。
 
-架构升级（阶段2）：
-1. 新增 DataProfiler、CodeGenerator、Debugger Agent
-2. CodeGenerator → Debugger 形成自修复循环
-3. 占位 Agent 替换为真实实现
-4. 保留 visualizer 和 report_writer 占位
+架构升级（阶段3）：
+1. Visualizer Agent 替换占位（LLM 驱动可视化）
+2. ReportWriter Agent 替换占位（Markdown 报告生成）
+3. Visualizer 也接入 CodeGenerator→Debugger 自修复循环
+4. 加载社区 Skill
 
 Graph 结构：
 
@@ -22,18 +22,24 @@ Graph 结构：
  ┌───────┼────────┬───────────┬───────────┬──────────┐
  │       │        │           │           │          │
  ▼       ▼        ▼           ▼           ▼          ▼
-data   data    code_gen → debugger  visual    report  chat
-parser profiler  ↻ (循环)     izer     writer
- │       │        │           │           │          │
- └───────┴────────┴───────────┴───────────┴──────────┘
-                          │
-                     ┌────▼────┐
-                     │   END   │
-                     └─────────┘
+data   data    code_gen   visualizer  report     chat
+parser profiler  │             │        writer
+ │       │    should_retry  should_retry  │          │
+ │       │    ┌───┴───┐    ┌───┴───┐      │          │
+ │       │  retry   done retry   done     │          │
+ │       │    ↓       ↓    ↓       ↓      │          │
+ │       │  debugger END  debugger END    │          │
+ │       │    ↻                            │          │
+ └───────┴────────────────────────────────┴──────────┘
+                      │
+                 ┌────▼────┐
+                 │   END   │
+                 └─────────┘
 """
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import InMemorySaver
@@ -44,11 +50,19 @@ from src.agents.data_parser import data_parser_node
 from src.agents.data_profiler import data_profiler_node
 from src.agents.code_generator import code_generator_node
 from src.agents.debugger import debugger_node, should_retry
-from src.agents.chat import chat_node, placeholder_node
+from src.agents.visualizer import visualizer_node
+from src.agents.report_writer import report_writer_node
+from src.agents.chat import chat_node
 
 # 确保内置 Skill 已注册
 from src.skills.builtin_skills import register_builtin_skills as _register
 _register()
+
+# 加载社区 Skill（如果目录存在）
+from src.skills.base import get_registry as _get_registry
+_community_dir = Path(__file__).parent.parent.parent / "skills" / "community"
+if _community_dir.exists():
+    _get_registry().load_from_directory(_community_dir)
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +72,7 @@ def build_analysis_graph(
     debug: bool = False,
 ) -> "CompiledStateGraph":
     """
-    构建并编译数据分析工作流图 (v2)
+    构建并编译数据分析工作流图 (v3)
 
     Args:
         with_checkpointer: 是否启用内存检查点（支持会话恢复）
@@ -79,16 +93,22 @@ def build_analysis_graph(
     # 调度中心（入口）
     graph.add_node("coordinator", coordinator_node)
 
-    # 已实现的 Agent
+    # 数据层
     graph.add_node("data_parser", data_parser_node)
     graph.add_node("data_profiler", data_profiler_node)
+
+    # 代码生成 + 修复循环
     graph.add_node("code_generator", code_generator_node)
     graph.add_node("debugger", debugger_node)
-    graph.add_node("chat", chat_node)
 
-    # 占位 Agent（阶段3实现）
-    graph.add_node("visualizer", placeholder_node("visualizer"))
-    graph.add_node("report_writer", placeholder_node("report_writer"))
+    # 可视化（阶段3 — 真实实现）
+    graph.add_node("visualizer", visualizer_node)
+
+    # 报告（阶段3 — 真实实现）
+    graph.add_node("report_writer", report_writer_node)
+
+    # 对话兜底
+    graph.add_node("chat", chat_node)
 
     # ============================================================
     # 3. 定义边 (Edges)
@@ -112,30 +132,39 @@ def build_analysis_graph(
     )
 
     # === CodeGenerator → Debugger 自修复循环 ===
-    # code_generator 执行完后，检查是否需要修复
     graph.add_conditional_edges(
         "code_generator",
         should_retry,
         {
-            "retry": "debugger",   # 执行失败 → 修复
-            "done": END,           # 执行成功 → 结束
+            "retry": "debugger",
+            "done": END,
         },
     )
 
-    # debugger 执行完后，再检查是否需要继续修复
+    # === Visualizer → Debugger 自修复循环 ===
+    # Visualizer 也可能生成失败的代码，复用 Debugger 修复
+    graph.add_conditional_edges(
+        "visualizer",
+        should_retry,
+        {
+            "retry": "debugger",
+            "done": END,
+        },
+    )
+
+    # Debugger 自循环
     graph.add_conditional_edges(
         "debugger",
         should_retry,
         {
-            "retry": "debugger",   # 继续修复（自循环）
-            "done": END,           # 修复成功或超限 → 结束
+            "retry": "debugger",
+            "done": END,
         },
     )
 
     # 其他 Agent → END（单次执行）
     graph.add_edge("data_parser", END)
     graph.add_edge("data_profiler", END)
-    graph.add_edge("visualizer", END)
     graph.add_edge("report_writer", END)
     graph.add_edge("chat", END)
 
@@ -148,7 +177,7 @@ def build_analysis_graph(
         compile_kwargs["checkpointer"] = InMemorySaver()
 
     compiled = graph.compile(**compile_kwargs)
-    logger.info("数据分析工作流图 v2 编译完成（含 CodeGenerator → Debugger 循环）")
+    logger.info("数据分析工作流图 v3 编译完成（Visualizer + ReportWriter 已接入）")
 
     return compiled
 
