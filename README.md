@@ -17,13 +17,29 @@
    ▼       ▼        ▼         ▼          ▼
  Data    Data    Code Gen  Visualizer  Report
  Parser  Profiler  erator              Writer
-   │       │        │         │          │
+   │       │     ↓    ↑       │          │
+   │       │   Debugger (自动修复循环)     │
    └───────┴────────┴─────────┴──────────┘
                     │
-           ┌───────▼────────┐
-           │  Code Sandbox   │
-           │  (安全执行环境)   │
-           └────────────────┘
+        ┌───────────▼───────────┐
+        │   Skill Registry      │
+        │  (能力注册 + 路由)     │
+        ├───────────────────────┤
+        │   Code Sandbox        │
+        │  (subprocess 隔离执行) │
+        └───────────────────────┘
+```
+
+### 核心流程：代码生成 → 自动修复
+
+```
+CodeGenerator ──生成代码──▶ Sandbox 执行
+                               │
+                          成功? ──▶ 返回结果
+                               │
+                          失败? ──▶ Debugger ──修复代码──▶ Sandbox 重试
+                                      ↑                        │
+                                      └──── 最多重试 3 次 ─────┘
 ```
 
 ## 技术栈
@@ -75,21 +91,30 @@ multi-agent-data-analysis/
 │   ├── agents/              # Agent 实现
 │   │   ├── coordinator.py   # 调度中心 (意图识别+路由)
 │   │   ├── data_parser.py   # 数据解析专家
+│   │   ├── data_profiler.py # 数据探索分析 (Skill 驱动)
+│   │   ├── code_generator.py# LLM 动态代码生成
+│   │   ├── debugger.py      # 自动修复 + 重试循环
 │   │   └── chat.py          # 普通对话 + 占位 Agent
 │   ├── graph/               # LangGraph 图定义
-│   │   ├── state.py         # 全局 AnalysisState (TypedDict)
-│   │   └── builder.py       # StateGraph 构建与编译
-│   ├── skills/              # Skill 注册与管理 (阶段2)
+│   │   ├── state.py         # AnalysisState + DatasetMeta + CodeResult
+│   │   └── builder.py       # StateGraph v2 (含 Debugger 循环)
+│   ├── skills/              # Skill 注册与管理
+│   │   ├── base.py          # Skill/SkillMeta/SkillRegistry 基类
+│   │   └── builtin_skills.py# 5 个内置分析 Skill
+│   ├── sandbox/             # 代码安全执行环境
+│   │   └── executor.py      # subprocess 隔离 + 超时 + 安全检查
 │   ├── tools/               # 工具函数
-│   ├── sandbox/             # 代码安全执行环境 (阶段2)
 │   ├── memory/              # 记忆系统 (阶段4)
 │   └── utils/
 │       └── llm.py           # LLM 客户端封装
-├── tests/                   # 测试套件
+├── tests/                   # 测试套件 (49 tests)
 │   ├── conftest.py
-│   ├── test_state.py
-│   ├── test_data_parser.py
-│   └── test_graph_build.py
+│   ├── test_state.py        # 3 tests
+│   ├── test_data_parser.py  # 10 tests
+│   ├── test_graph_build.py  # 5 tests
+│   ├── test_sandbox.py      # 12 tests
+│   ├── test_skills.py       # 12 tests
+│   └── test_agents.py       # 7 tests
 ├── data/
 │   └── sample/              # 示例数据
 ├── main.py                  # 命令行入口
@@ -99,10 +124,22 @@ multi-agent-data-analysis/
 
 ## 开发路线
 
-- [x] **阶段 1**: 项目骨架 — State 定义、Coordinator、DataParser、Graph 组装、测试
-- [ ] **阶段 2**: 核心 Agent — DataProfiler、CodeGenerator、代码沙箱、Skill 体系
+- [x] **阶段 1**: 项目骨架 — State 定义、Coordinator、DataParser、Graph 组装、16 tests
+- [x] **阶段 2**: 核心 Agent + Skill 体系 + 代码沙箱 — DataProfiler、CodeGenerator、Debugger、SkillRegistry、Sandbox、49 tests
 - [ ] **阶段 3**: 可视化 + 报告 — Streamlit 前端、图表渲染、ReportWriter
 - [ ] **阶段 4**: 生产化 — 持久化、HITL、记忆系统、错误恢复
+
+### 阶段 2 新增能力
+
+| 模块 | 说明 |
+|------|------|
+| **Code Sandbox** | subprocess 隔离执行，5s 超时熔断，危险代码拦截（os/sys/subprocess/shutil），自动图表捕获 |
+| **Skill Registry** | 可注册/可版本化/可搜索的能力单元，支持标签路由和关键字匹配 |
+| **5 内置 Skills** | descriptive_stats、distribution_analysis、correlation_analysis、missing_value_analysis、outlier_detection |
+| **DataProfiler Agent** | Skill 驱动的数据探索，自动匹配合适的分析 Skill 生成代码 |
+| **CodeGenerator Agent** | LLM 动态生成 pandas/matplotlib 代码，Sandbox 执行 |
+| **Debugger Agent** | 捕获 stderr，LLM 自动修复代码，最多 3 次重试循环 |
+| **StateGraph v2** | CodeGenerator → should_retry → Debugger 自修复循环 |
 
 ## License
 
