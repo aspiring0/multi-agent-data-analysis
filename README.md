@@ -113,14 +113,19 @@ multi-agent-data-analysis/
 │   │   └── github_loader.py # GitHub Skill 下载器
 │   ├── sandbox/             # 代码安全执行环境
 │   │   └── executor.py      # subprocess 隔离 + 超时 + 安全检查
-│   ├── memory/              # 记忆系统 (阶段4)
+│   ├── persistence/         # 会话持久化
+│   │   └── session_store.py # SQLite 存储会话/消息/数据集/产物
+│   ├── memory/              # 跨会话记忆系统
+│   │   └── memory_store.py  # 分析偏好 + 数据知识 + 操作模式
+│   ├── hitl/                # Human-in-the-Loop 审批
+│   │   └── approval.py      # 风险分析 + 审批管理器 + 3级拦截
 │   └── utils/
-│       └── llm.py           # LLM 客户端封装
+│       ├── llm.py           # LLM 客户端封装
+│       └── error_recovery.py# 重试 + 降级 + 异常处理
 ├── skills/                  # SKILL.md 格式技能
 │   ├── community/           # 8 个社区 Skill (GitHub 下载)
 │   └── examples/            # 示例 Skill
-├── tests/                   # 测试套件 (73 tests)
-│   ├── conftest.py
+├── tests/                   # 测试套件 (116 tests)
 │   ├── test_state.py        # 3 tests
 │   ├── test_data_parser.py  # 10 tests
 │   ├── test_graph_build.py  # 8 tests
@@ -128,7 +133,11 @@ multi-agent-data-analysis/
 │   ├── test_skills.py       # 25 tests
 │   ├── test_agents.py       # 7 tests
 │   ├── test_visualizer.py   # 4 tests
-│   └── test_report_writer.py# 4 tests
+│   ├── test_report_writer.py# 4 tests
+│   ├── test_persistence.py  # 8 tests
+│   ├── test_memory.py       # 10 tests
+│   ├── test_hitl.py         # 11 tests
+│   └── test_error_recovery.py# 13 tests
 ├── data/
 │   └── sample/              # 示例数据
 ├── main.py                  # 命令行入口
@@ -141,9 +150,18 @@ multi-agent-data-analysis/
 - [x] **阶段 1**: 项目骨架 — State 定义、Coordinator、DataParser、Graph 组装、16 tests
 - [x] **阶段 2**: 核心 Agent + Skill 体系 + 代码沙箱 — DataProfiler、CodeGenerator、Debugger、SkillRegistry、Sandbox、49 tests
 - [x] **阶段 3**: 可视化 + 报告 + 前端 — Streamlit UI、Visualizer、ReportWriter、8 个社区 Skill、73 tests
-- [ ] **阶段 4**: 生产化 — 持久化、HITL、记忆系统、错误恢复
+- [x] **阶段 4**: 生产化 — SQLite 持久化、HITL 审批、跨会话记忆、错误恢复、116 tests
 
-### 阶段 3 新增能力
+### 阶段 4 新增能力
+
+| 模块 | 说明 |
+|------|------|
+| **会话持久化** | SQLite 存储会话历史、消息、数据集元信息、代码/图表/报告产物，页面刷新不丢失 |
+| **HITL 审批** | 3 级拦截（INFO/CONFIRM/BLOCK），代码风险自动分析，危险操作强制拦截，支持自动审批模式 |
+| **记忆系统** | 跨会话知识积累（偏好/知识/模式），语义搜索，TTL 过期淮化，可注入 LLM 提示词 |
+| **错误恢复** | 指数退避重试、优雅降级、全局异常捕获、用户友好错误消息转换 |
+
+### 阶段 3 能力
 
 | 模块 | 说明 |
 |------|------|
