@@ -190,6 +190,18 @@ class SessionStore:
 
     # ---- Datasets ----
 
+    def save_dataset(self, session_id: str, dataset_meta: dict):
+        """保存单个数据集元信息（追加式）"""
+        conn = self._get_conn()
+        try:
+            conn.execute(
+                "INSERT INTO datasets (session_id, meta_json) VALUES (?, ?)",
+                (session_id, json.dumps(dataset_meta, ensure_ascii=False)),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
     def save_datasets(self, session_id: str, datasets: list[dict]):
         """保存数据集元信息（覆盖式）"""
         conn = self._get_conn()

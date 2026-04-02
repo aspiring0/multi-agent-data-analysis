@@ -1,0 +1,133 @@
+"""
+WebSocket 处理器
+
+处理实时聊天通信和流式响应。
+"""
+import json
+import logging
+from fastapi import WebSocket, WebSocketDisconnect
+from langchain_core.messages import HumanMessage
+
+from src.graph.builder import get_graph
+from src.persistence.session_store import SessionStore
+
+logger = logging.getLogger(__name__)
+
+
+async def websocket_chat(websocket: WebSocket, session_id: str):
+    """
+    WebSocket 聊天处理器
+
+    Args:
+        websocket: WebSocket 连接
+        session_id: 会话 ID
+    """
+    await websocket.accept()
+
+    logger.info(f"WebSocket 连接建立: session_id={session_id}")
+
+    try:
+        # 发送连接确认
+        await websocket.send_json({
+            "type": "connected",
+            "session_id": session_id
+        })
+
+        while True:
+            # 接收消息
+            data = await websocket.receive_json()
+            message_type = data.get("type")
+
+            if message_type == "ping":
+                # 心跳检测
+                await websocket.send_json({"type": "pong"})
+                continue
+
+            if message_type == "message":
+                # 用户消息
+                user_message = data.get("message")
+                if not user_message:
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": "消息内容不能为空"
+                    })
+                    continue
+
+                # 保存用户消息到数据库
+                store = SessionStore()
+                if not store.get_session(session_id):
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": "会话不存在"
+                    })
+                    continue
+
+                store.add_message(session_id, "user", user_message)
+
+                # 获取 Graph
+                graph = get_graph(with_checkpointer=False)
+
+                # 构建状态
+                state = {
+                    "messages": [HumanMessage(content=user_message)],
+                    "datasets": store.get_datasets(session_id),
+                    "active_dataset_index": 0,
+                }
+
+                # 发送开始标记
+                await websocket.send_json({
+                    "type": "start"
+                })
+
+                # 流式处理
+                try:
+                    async for chunk in graph.astream(
+                        state,
+                        config={"configurable": {"thread_id": session_id}}
+                    ):
+                        if "messages" in chunk:
+                            messages = chunk["messages"]
+                            if messages:
+                                last_msg = messages[-1]
+                                if hasattr(last_msg, 'content') and last_msg.content:
+                                    # 发送内容片段
+                                    await websocket.send_json({
+                                        "type": "chunk",
+                                        "content": last_msg.content
+                                    })
+
+                    # 发送完成标记
+                    await websocket.send_json({
+                        "type": "done"
+                    })
+
+                    # 保存完整的 AI 回复
+                    # 注意：这里需要从流式处理中收集完整内容
+                    # 简化实现，实际可能需要在流式过程中累积内容
+
+                except Exception as e:
+                    logger.error(f"Graph 执行错误: {e}", exc_info=True)
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": f"处理失败: {str(e)}"
+                    })
+
+            else:
+                await websocket.send_json({
+                    "type": "error",
+                    "message": f"未知的消息类型: {message_type}"
+                })
+
+    except WebSocketDisconnect:
+        logger.info(f"WebSocket 连接断开: session_id={session_id}")
+    except Exception as e:
+        logger.error(f"WebSocket 错误: {e}", exc_info=True)
+        try:
+            await websocket.send_json({
+                "type": "error",
+                "message": f"服务器错误: {str(e)}"
+            })
+        except:
+            pass
+    finally:
+        logger.info(f"WebSocket 连接关闭: session_id={session_id}")

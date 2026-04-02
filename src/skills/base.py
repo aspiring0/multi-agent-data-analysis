@@ -260,6 +260,7 @@ def _parse_skill_md(skill_md_path: Path) -> Skill | None:
     version: 1.0.0
     category: analysis
     tags: [tag1, tag2]
+    code_template_file: generate.py  # 可选
     ---
     # Skill Title
 
@@ -317,6 +318,35 @@ def _parse_skill_md(skill_md_path: Path) -> Skill | None:
 
     display_name = meta_dict.get("display_name", name.replace("-", " ").title())
 
+    # 处理 code_template_file - 动态导入 generate_code
+    generate_code_func = None
+    code_template_file = meta_dict.get("code_template_file")
+    if code_template_file:
+        try:
+            skill_dir = skill_md_path.parent
+            code_file_path = skill_dir / code_template_file
+            if code_file_path.exists():
+                # 动态导入 generate_code 函数
+                import importlib.util
+                spec = importlib.util.spec_from_file_location(
+                    f"{name}_generate",
+                    code_file_path
+                )
+                if spec and spec.loader:
+                    module = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(module)
+                    if hasattr(module, "generate_code"):
+                        generate_code_func = module.generate_code
+                        logger.info(f"成功导入 {name} 的 generate_code 函数")
+                    else:
+                        logger.warning(f"{code_file_path} 中没有找到 generate_code 函数")
+                else:
+                    logger.warning(f"无法加载 {code_file_path}")
+            else:
+                logger.warning(f"代码文件不存在: {code_file_path}")
+        except Exception as e:
+            logger.error(f"导入 {name} 的代码生成函数失败: {e}")
+
     meta = SkillMeta(
         name=name,
         display_name=display_name,
@@ -328,7 +358,7 @@ def _parse_skill_md(skill_md_path: Path) -> Skill | None:
         source="local",
     )
 
-    return Skill(meta=meta)
+    return Skill(meta=meta, generate_code=generate_code_func)
 
 
 # ============================================================

@@ -69,6 +69,23 @@ st.markdown("""
 
     /* 聊天消息 */
     .stChatMessage { max-width: 100%; }
+
+    /* 固定聊天输入框在底部 */
+    .stChatInputContainer {
+        position: fixed !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        background-color: white !important;
+        padding: 1rem 2rem !important;
+        border-top: 1px solid #e6e6e6 !important;
+        z-index: 999 !important;
+    }
+
+    /* 为聊天消息区域留出底部空间 */
+    main[data-testid="stMainBlock"] {
+        padding-bottom: 100px !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -221,24 +238,32 @@ if session is None:
     st.stop()
 
 # 有会话时显示聊天界面
+# 先获取用户输入（必须在列布局之前）
+prompt = st.chat_input("输入你的分析需求...")
+
 # 使用两列布局：左侧聊天(7)，右侧面板(3)
 chat_col, panel_col = st.columns([7, 3])
 
 # ---- 聊天区 ----
 with chat_col:
-    # 显示历史消息
-    for msg in session["messages"]:
-        role = "user" if isinstance(msg, HumanMessage) else "assistant"
-        content = msg.content if hasattr(msg, "content") else str(msg)
-        with st.chat_message(role):
-            st.markdown(content)
+    # 聊天消息容器（限制高度）
+    chat_container = st.container()
 
-    # 输入框
-    if prompt := st.chat_input("输入你的分析需求..."):
-        # 添加用户消息
-        user_msg = HumanMessage(content=prompt)
-        session["messages"].append(user_msg)
+    # 在容器内显示历史消息
+    with chat_container:
+        for msg in session["messages"]:
+            role = "user" if isinstance(msg, HumanMessage) else "assistant"
+            content = msg.content if hasattr(msg, "content") else str(msg)
+            with st.chat_message(role):
+                st.markdown(content)
 
+# 处理用户输入（在列布局之后）
+if prompt:
+    # 添加用户消息
+    user_msg = HumanMessage(content=prompt)
+    session["messages"].append(user_msg)
+
+    with chat_col:
         with st.chat_message("user"):
             st.markdown(prompt)
 
@@ -290,6 +315,9 @@ with chat_col:
                     st.error(error_msg)
                     session["messages"].append(AIMessage(content=error_msg))
                     logging.error(f"Graph invoke error: {e}", exc_info=True)
+
+    # 触发重新运行以显示新消息
+    st.rerun()
 
 # ---- 右面板：代码 + 图表 ----
 with panel_col:

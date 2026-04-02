@@ -58,11 +58,11 @@ from src.agents.chat import chat_node
 from src.skills.builtin_skills import register_builtin_skills as _register
 _register()
 
-# 加载社区 Skill（如果目录存在）
+# 加载示例 Skill（如果目录存在）
 from src.skills.base import get_registry as _get_registry
-_community_dir = Path(__file__).parent.parent.parent / "skills" / "community"
-if _community_dir.exists():
-    _get_registry().load_from_directory(_community_dir)
+_examples_dir = Path(__file__).parent.parent.parent / "skills" / "examples"
+if _examples_dir.exists():
+    _get_registry().load_from_directory(_examples_dir)
 
 logger = logging.getLogger(__name__)
 
