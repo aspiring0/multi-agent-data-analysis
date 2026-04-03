@@ -1,0 +1,72 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv
+venv/
+ENV/
+.eggs/
+*.egg-info/
+*.egg
+
+# Node
+**/node_modules/
+**/.next/
+**/out/
+**/.npm/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+
+# Build artifacts
+dist/
+build/
+*.log
+
+# Data (keep structure but not content)
+data/uploads/*
+!data/uploads/.gitkeep
+data/outputs/*
+!data/outputs/.gitkeep
+data/sessions.db
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# Test files
+tests/
+frontend/src/**/__tests__/
+frontend/src/**/*.test.*
+frontend/src/**/*.spec.*
+
+# Misc
+.DS_Store
+Thumbs.db
+*.bak
+*.tmp

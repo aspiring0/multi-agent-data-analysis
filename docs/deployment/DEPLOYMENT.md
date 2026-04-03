@@ -5,102 +5,122 @@
 | 方式 | 适用场景 | 复杂度 | 成本 |
 |------|---------|--------|------|
 | **本地运行** | 开发/演示 | ⭐ | 免费 |
-| **Docker 容器** | 团队共享/测试环境 | ⭐⭐ | 低 |
+| **Docker 开发环境** | 本地测试 | ⭐⭐ | 免费 |
+| **Docker 生产环境** | 生产部署 | ⭐⭐⭐ | 中 |
 | **云服务器** | 生产环境 | ⭐⭐⭐ | 中 |
-| **Streamlit Cloud** | 快速上线演示 | ⭐ | 免费 |
 
 ---
 
-## 方式 1：本地运行（开发/演示）
+## 方式 1：本地运行（开发）
+
+### 环境要求
+- Python 3.10+
+- Node.js 18+
+- Docker (可选，用于 PostgreSQL)
+
+### 快速启动
 
 ```bash
 # 1. 克隆仓库
 git clone https://github.com/aspiring0/multi-agent-data-analysis.git
 cd multi-agent-data-analysis
 
-# 2. 创建虚拟环境
-python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
+# 2. 启动 PostgreSQL (Docker)
+docker-compose up -d postgres
 
-# 3. 安装依赖
+# 3. 启动后端 (新终端)
+conda activate multi_agent
 pip install -r requirements.txt
+python -m uvicorn backend.api.main:app --reload --port 8000
 
-# 4. 配置环境变量
-cp .env.example .env
-# 编辑 .env，填入 DEEPSEEK_API_KEY
-
-# 5. 运行测试
-python -m pytest tests/ -v
-
-# 6. 启动 Web 界面
-streamlit run app.py
+# 4. 启动前端 (新终端)
+cd frontend && npm install && npm run dev
 ```
+
+### 访问地址
+
+| 服务 | 地址 |
+|-----|------|
+| 前端界面 | http://localhost:3000 |
+| 后端 API | http://localhost:8000 |
+| API 文档 | http://localhost:8000/docs |
 
 ---
 
-## 方式 2：Docker 容器
-
-### Dockerfile
-
-```dockerfile
-FROM python:3.11-slim
-
-WORKDIR /app
-
-# 系统依赖（matplotlib 中文字体）
-RUN apt-get update && apt-get install -y \
-    fonts-wqy-microhei \
-    && rm -rf /var/lib/apt/lists/*
-
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-COPY . .
-
-EXPOSE 8501
-
-HEALTHCHECK CMD curl --fail http://localhost:8501/_stcore/health
-
-ENTRYPOINT ["streamlit", "run", "app.py", \
-    "--server.port=8501", \
-    "--server.address=0.0.0.0", \
-    "--server.headless=true"]
-```
-
-### 构建和运行
+## 方式 2：Docker 开发环境
 
 ```bash
-# 构建
-docker build -t multi-agent-analysis .
+# 启动所有服务
+docker-compose up -d
 
-# 运行
-docker run -d \
-  --name analysis-platform \
-  -p 8501:8501 \
-  -e DEEPSEEK_API_KEY=your_key_here \
-  -v $(pwd)/data:/app/data \
-  multi-agent-analysis
-```
+# 查看日志
+docker-compose logs -f
 
-### docker-compose.yml（推荐）
-
-```yaml
-version: '3.8'
-services:
-  app:
-    build: .
-    ports:
-      - "8501:8501"
-    environment:
-      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
-    volumes:
-      - ./data:/app/data
-    restart: unless-stopped
+# 停止服务
+docker-compose down
 ```
 
 ---
 
-## 方式 3：云服务器部署
+## 方式 3：Docker 生产部署
+
+### 架构
+
+```
+                    ┌─────────────┐
+                    │   Nginx     │ :80
+                    │ (Reverse    │
+                    │  Proxy)     │
+                    └──────┬──────┘
+                           │
+           ┌───────────────┼───────────────┐
+           │               │               │
+           ▼               ▼               ▼
+    ┌─────────────┐ ┌─────────────┐ ┌─────────────┐
+    │  Frontend   │ │   Backend   │ │  PostgreSQL │
+    │  (Next.js)  │ │  (FastAPI)  │ │   :5432     │
+    │   :3000     │ │   :8000     │ │             │
+    └─────────────┘ └─────────────┘ └─────────────┘
+```
+
+### 部署步骤
+
+```bash
+# 1. 配置环境变量
+cat > .env.prod << EOF
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=your_secure_password
+DEEPSEEK_API_KEY=your_api_key
+DEEPSEEK_MODEL=deepseek-chat
+LOG_LEVEL=INFO
+NEXT_PUBLIC_WS_URL=ws://your-domain.com
+NEXT_PUBLIC_API_URL=http://your-domain.com
+EOF
+
+# 2. 构建并启动
+docker-compose -f docker-compose.prod.yml up -d --build
+
+# 3. 健康检查
+./scripts/health_check.sh
+
+# 4. 查看日志
+docker-compose -f docker-compose.prod.yml logs -f
+```
+
+### Docker 文件说明
+
+| 文件 | 用途 |
+|------|------|
+| `Dockerfile.backend` | FastAPI 后端镜像 |
+| `Dockerfile.frontend` | Next.js 前端镜像 (多阶段构建) |
+| `docker-compose.yml` | 开发环境配置 |
+| `docker-compose.prod.yml` | 生产环境配置 (含 Nginx) |
+| `nginx.conf` | Nginx 反向代理配置 |
+| `.dockerignore` | Docker 构建排除文件 |
+
+---
+
+## 方式 4：云服务器部署
 
 ### 推荐配置
 
@@ -111,7 +131,7 @@ services:
 | 磁盘 | 20 GB | 50 GB SSD |
 | 系统 | Ubuntu 22.04 | Ubuntu 22.04 |
 
-### 部署步骤（以 Ubuntu 为例）
+### 部署步骤
 
 ```bash
 # 1. 安装 Docker
@@ -123,69 +143,91 @@ git clone https://github.com/aspiring0/multi-agent-data-analysis.git
 cd multi-agent-data-analysis
 
 # 3. 配置环境变量
-echo "DEEPSEEK_API_KEY=your_key" > .env
+cp .env.example .env.prod
+# 编辑 .env.prod，填入配置
 
-# 4. 启动
-docker compose up -d
+# 4. 启动生产环境
+docker-compose -f docker-compose.prod.yml up -d --build
 
-# 5. 配置 Nginx 反向代理（可选）
-# /etc/nginx/sites-available/analysis
-# server {
-#     listen 80;
-#     server_name your-domain.com;
-#     location / {
-#         proxy_pass http://localhost:8501;
-#         proxy_http_version 1.1;
-#         proxy_set_header Upgrade $http_upgrade;
-#         proxy_set_header Connection "upgrade";
-#         proxy_set_header Host $host;
-#     }
-# }
+# 5. 验证部署
+curl http://localhost/health
+```
+
+### HTTPS 配置 (推荐)
+
+```bash
+# 使用 Certbot 获取 SSL 证书
+sudo apt install certbot python3-certbot-nginx
+sudo certbot --nginx -d your-domain.com
+
+# 自动续期
+sudo certbot renew --dry-run
 ```
 
 ---
 
-## 方式 4：Streamlit Cloud（最快上线）
+## 健康检查与监控
 
-1. Fork 仓库到你的 GitHub
-2. 访问 [share.streamlit.io](https://share.streamlit.io)
-3. 选择仓库 → 分支 `main` → 入口文件 `app.py`
-4. 在 Secrets 中配置：
-   ```toml
-   DEEPSEEK_API_KEY = "your_key_here"
-   ```
-5. 点击 Deploy
+### 手动检查
+
+```bash
+# 运行健康检查脚本
+./scripts/health_check.sh
+
+# 或手动检查各服务
+curl http://localhost:8000/health           # 后端
+curl http://localhost:8000/health/detailed  # 详细状态
+curl http://localhost:3000                  # 前端
+curl http://localhost/health                # Nginx
+```
+
+### 详细健康检查端点
+
+`GET /health/detailed` 返回:
+
+```json
+{
+  "status": "healthy",
+  "timestamp": "2026-04-04T12:00:00",
+  "components": {
+    "database": {"status": "ok", "type": "sqlite"},
+    "postgres": {"status": "ok"},
+    "llm": {"status": "configured", "model": "deepseek-chat"},
+    "disk": {"status": "ok", "free_gb": 50.5, "used_percent": 45.2}
+  }
+}
+```
 
 ---
 
 ## 生产化清单
 
 ### 安全
-- [ ] DEEPSEEK_API_KEY 通过环境变量注入，不写入代码
-- [ ] 沙箱已拦截 os.system/subprocess/eval 等危险操作
-- [ ] HITL 审批已启用（生产环境设 `auto_approve=False`）
-- [ ] 文件上传大小限制（Streamlit 默认 200MB）
+- [x] API Key 通过环境变量注入
+- [x] 沙箱已拦截危险操作
+- [x] HITL 审批已启用
+- [x] Nginx 安全头配置
+- [ ] HTTPS 证书配置
+- [ ] 防火墙规则设置
 
 ### 可靠性
-- [ ] 错误恢复：LLM 调用指数退避重试（已实现）
-- [ ] 沙箱超时熔断：30 秒（可配置）
-- [ ] Debugger 最多 3 次自修复（防无限循环）
-- [ ] 全局异常捕获（已实现）
+- [x] PostgreSQL Checkpointer 持久化
+- [x] WebSocket 指数退避重连
+- [x] Docker 健康检查
+- [x] 自动重启 (restart: unless-stopped)
+- [ ] 定期数据库备份
 
 ### 性能
-- [ ] 长会话消息压缩（已实现，滑动窗口 + 摘要）
-- [ ] 异步任务队列（已实现，3 并发线程）
-- [ ] 社区 Skill Progressive Disclosure（按需加载）
-
-### 数据
-- [ ] SQLite 会话持久化（已实现）
-- [ ] 跨会话记忆系统（已实现）
-- [ ] 定期清理过期记忆和临时文件
+- [x] 前端静态资源缓存
+- [x] Gzip 压缩
+- [x] 多 worker (uvicorn --workers 4)
+- [ ] CDN 配置 (可选)
 
 ### 监控
-- [ ] 日志级别可配置（LOG_LEVEL 环境变量）
-- [ ] 任务队列状态可查询
-- [ ] 考虑接入 Prometheus + Grafana（长期）
+- [x] 健康检查端点
+- [x] 结构化日志
+- [ ] Prometheus 指标 (可选)
+- [ ] Grafana 仪表板 (可选)
 
 ---
 
@@ -195,7 +237,37 @@ docker compose up -d
 |------|------|--------|------|
 | `DEEPSEEK_API_KEY` | ✅ | - | DeepSeek API 密钥 |
 | `DEEPSEEK_MODEL` | - | `deepseek-chat` | 模型名称 |
-| `DEEPSEEK_BASE_URL` | - | `https://api.deepseek.com` | API 地址 |
-| `LLM_TEMPERATURE` | - | `0` | 生成温度 |
-| `SANDBOX_TIMEOUT` | - | `30` | 沙箱超时（秒） |
+| `POSTGRES_URI` | - | `postgresql://...` | PostgreSQL 连接串 |
+| `CHECKPOINTER_TYPE` | - | `postgres` | 检查点存储类型 |
 | `LOG_LEVEL` | - | `INFO` | 日志级别 |
+| `NEXT_PUBLIC_WS_URL` | - | `ws://localhost` | WebSocket 地址 |
+| `NEXT_PUBLIC_API_URL` | - | `http://localhost` | API 地址 |
+
+---
+
+## 常见问题
+
+### 端口被占用
+```bash
+# 查找并终止占用端口的进程
+netstat -ano | findstr :3000
+taskkill /PID <进程ID> /F
+```
+
+### PostgreSQL 连接失败
+```bash
+docker-compose restart postgres
+docker-compose logs postgres
+```
+
+### 前端构建失败
+```bash
+cd frontend
+rm -rf node_modules .next
+npm install
+npm run build
+```
+
+---
+
+*最后更新: 2026-04-04*

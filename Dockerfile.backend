@@ -1,25 +1,42 @@
-# 后端 Docker 镜像
+# ============================================
+# Multi-Agent Data Analysis Backend
+# ============================================
 FROM python:3.11-slim
 
 WORKDIR /app
 
-# 安装系统依赖
-RUN apt-get update && apt-get install -y \
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
-# 复制 requirements.txt
+# Copy requirements first (for caching)
 COPY requirements.txt .
 
-# 安装 Python 依赖
+# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 复制项目代码
-COPY . .
+# Copy application code
+COPY src/ ./src/
+COPY backend/ ./backend/
+COPY configs/ ./configs/
+COPY skills/ ./skills/
 
-# 暴露端口
+# Create data directories
+RUN mkdir -p /app/data/uploads /app/data/outputs
+
+# Environment variables
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+
+# Expose port
 EXPOSE 8000
 
-# 启动命令
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Run server
 CMD ["uvicorn", "backend.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
