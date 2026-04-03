@@ -39,7 +39,6 @@ parser profiler  │             │        writer
 from __future__ import annotations
 
 import logging
-import os
 from pathlib import Path
 
 from langgraph.graph import StateGraph, END
@@ -68,18 +67,22 @@ logger = logging.getLogger(__name__)
 
 
 def _get_checkpointer():
-    """获取 PostgreSQL Checkpointer（优先使用 PostgreSQL，失败时回退到内存存储）"""
-    try:
-        from langgraph.checkpoint.postgres import PostgresSaver
-        postgres_uri = os.getenv(
-            "POSTGRES_URI",
-            "postgresql://postgres:postgres@localhost:5432/langgraph"
-        )
-        logger.info(f"使用 PostgreSQL Checkpointer")
-        return PostgresSaver.from_conn_string(postgres_uri)
-    except Exception as e:
-        logger.warning(f"PostgreSQL 连接失败，使用内存存储: {e}")
-        from langgraph.checkpoint.memory import InMemorySaver
+    """获取 Checkpointer（根据 CHECKPOINTER_TYPE 配置选择）"""
+    from configs.settings import settings
+    from langgraph.checkpoint.memory import InMemorySaver
+
+    checkpointer_type = settings.CHECKPOINTER_TYPE.lower()
+
+    if checkpointer_type == "postgres":
+        try:
+            from langgraph.checkpoint.postgres import PostgresSaver
+            logger.info(f"使用 PostgreSQL Checkpointer")
+            return PostgresSaver.from_conn_string(settings.POSTGRES_URI)
+        except Exception as e:
+            logger.warning(f"PostgreSQL 连接失败，降级到内存存储: {e}")
+            return InMemorySaver()
+    else:
+        logger.info("使用内存 Checkpointer")
         return InMemorySaver()
 
 

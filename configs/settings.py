@@ -24,6 +24,13 @@ class Settings:
     SANDBOX_TIMEOUT: int = int(os.getenv("SANDBOX_TIMEOUT", "30"))
     SANDBOX_MAX_MEMORY_MB: int = int(os.getenv("SANDBOX_MAX_MEMORY_MB", "512"))
 
+    # ---- 数据库配置 ----
+    POSTGRES_URI: str = os.getenv(
+        "POSTGRES_URI",
+        "postgresql://postgres:postgres@localhost:5432/langgraph"
+    )
+    CHECKPOINTER_TYPE: str = os.getenv("CHECKPOINTER_TYPE", "postgres")  # postgres | memory
+
     # ---- 路径配置 ----
     PROJECT_ROOT: Path = Path(__file__).parent.parent
     DATA_DIR: Path = PROJECT_ROOT / "data"

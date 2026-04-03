@@ -55,3 +55,57 @@ async def root():
 async def health_check():
     """健康检查端点"""
     return {"status": "healthy"}
+
+
+@app.get("/health/detailed")
+async def health_detailed():
+    """详细健康检查端点"""
+    import shutil
+    from datetime import datetime
+
+    checks = {
+        "status": "healthy",
+        "timestamp": datetime.now().isoformat(),
+        "components": {},
+    }
+
+    # 检查数据库连接
+    try:
+        from src.persistence.session_store import SessionStore
+        store = SessionStore()
+        store.list_sessions()
+        checks["components"]["database"] = {"status": "ok", "type": "sqlite"}
+    except Exception as e:
+        checks["components"]["database"] = {"status": "error", "message": str(e)}
+        checks["status"] = "degraded"
+
+    # 检查 PostgreSQL (可选)
+    try:
+        import psycopg2
+        from configs.settings import settings
+        conn = psycopg2.connect(settings.POSTGRES_URI)
+        conn.close()
+        checks["components"]["postgres"] = {"status": "ok"}
+    except Exception as e:
+        checks["components"]["postgres"] = {"status": "unavailable", "message": str(e)}
+
+    # 检查 LLM 配置
+    from configs.settings import settings
+    if settings.DEEPSEEK_API_KEY:
+        checks["components"]["llm"] = {"status": "configured", "model": settings.DEEPSEEK_MODEL}
+    else:
+        checks["components"]["llm"] = {"status": "not_configured"}
+        checks["status"] = "degraded"
+
+    # 检查磁盘空间
+    try:
+        total, used, free = shutil.disk_usage("/")
+        checks["components"]["disk"] = {
+            "status": "ok",
+            "free_gb": round(free / (1024**3), 2),
+            "used_percent": round(used / total * 100, 1),
+        }
+    except Exception:
+        checks["components"]["disk"] = {"status": "unknown"}
+
+    return checks
