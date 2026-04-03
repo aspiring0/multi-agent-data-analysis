@@ -88,6 +88,36 @@ def generate_code(**kwargs) -> str:
     return generated_code
 ```
 
+### Sanity Check 模式（推荐）
+
+所有内置 Skill 模板均包含 **Sanity Check**，用于在执行前验证数据有效性：
+
+```python
+def generate_code(**kwargs) -> str:
+    return '''
+# === Sanity Check: 验证数据 ===
+if df is None:
+    print("❌ 数据未加载 (df is None)")
+elif df.empty:
+    print("❌ 数据为空 (df is empty)")
+else:
+    print(f"✅ 数据有效: {len(df)} 行, {len(df.columns)} 列")
+
+    # 执行实际分析逻辑...
+    # ...
+'''
+```
+
+**Sanity Check 的作用**：
+- 提前检测空数据或未加载状态
+- 提供清晰的错误提示给用户
+- 避免后续代码因数据问题崩溃产生难以理解的错误
+
+**已实现的 Skill**：
+- `describe_statistics` - [generate.py](skills/builtin/describe_statistics/generate.py)
+- `distribution_analysis` - [generate.py](skills/builtin/distribution_analysis/generate.py)
+- `correlation_analysis` - [generate.py](skills/builtin/correlation_analysis/generate.py)
+
 ---
 
 ## 内置技能
@@ -648,7 +678,8 @@ result = execute_code(code=code, datasets=datasets)
 
 ---
 
-*最后更新: 2026-04-02*
+*最后更新: 2026-04-04*
 *总技能数: 10 (5 内置 + 3 官方 + 1 社区 + 1 示例)*
 *测试覆盖率: 50% (5/10)*
 *技能格式: SKILL.md + generate.py*
+*特性: 所有内置 Skill 包含 Sanity Check 数据验证*
