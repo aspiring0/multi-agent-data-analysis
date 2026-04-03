@@ -33,8 +33,9 @@ PREVIEW_ROWS = 5
 
 
 def _detect_encoding(file_path: str) -> str:
-    """简单的编码检测：尝试常见编码"""
-    encodings = ["utf-8", "gbk", "gb2312", "latin-1"]
+    """简单的编码检测：尝试常见编码（优先 utf-8-sig 处理 BOM）"""
+    # utf-8-sig 优先，自动处理 BOM
+    encodings = ["utf-8-sig", "utf-8", "gbk", "gb2312", "latin-1"]
     for enc in encodings:
         try:
             with open(file_path, "r", encoding=enc) as f:
@@ -42,7 +43,7 @@ def _detect_encoding(file_path: str) -> str:
             return enc
         except (UnicodeDecodeError, UnicodeError):
             continue
-    return "utf-8"  # fallback
+    return "utf-8-sig"  # fallback，优先处理 BOM
 
 
 def _load_dataframe(file_path: str) -> pd.DataFrame:
