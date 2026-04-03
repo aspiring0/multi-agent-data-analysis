@@ -14,69 +14,40 @@
 
 ## 快速开始
 
-### 1. 环境要求
+### 环境要求
 - Python 3.10+
 - Node.js 18+
-- PostgreSQL (Docker)
 - Conda (推荐)
+- Docker (可选，用于 PostgreSQL)
 
-### 2. 启动服务
+### 一键启动
 
 ```bash
-# 启动 PostgreSQL
+# 1. 启动 PostgreSQL (Docker)
 docker-compose up -d postgres
 
-# 启动后端
+# 2. 启动后端 (新终端)
 conda activate multi_agent
 python -m uvicorn backend.api.main:app --reload --port 8000
 
-# 启动前端
+# 3. 启动前端 (新终端)
 cd frontend && npm run dev
 ```
 
-### 3. 访问应用
-- 前端：http://localhost:3000
-- 后端 API：http://localhost:8000
-- API 文档：http://localhost:8000/docs
+### 访问地址
 
----
+| 服务 | 地址 |
+|-----|------|
+| **前端界面** | http://localhost:3000 |
+| **后端 API** | http://localhost:8000 |
+| **API 文档** | http://localhost:8000/docs |
 
-## 文档目录结构
+### 使用流程
 
-```
-docs/
-├── README.md                 # 本文档（文档索引）
-├── architecture/             # 架构设计
-│   └── fullstack-progress.md # 全栈架构改造进度
-├── deployment/               # 部署指南
-│   └── DEPLOYMENT.md         # 部署文档
-├── development/              # 开发指南
-│   └── backend-validation-guide.md
-├── skills/                   # 技能系统
-│   ├── skills.md             # 技能核心文档
-│   └── skills-refactoring-summary.md
-├── solutions/                # 工程化方案
-│   └── production-solutions.md
-└── troubleshooting/          # 故障排除（待创建）
-```
-
----
-
-## 按角色查找文档
-
-### 对于开发者
-- [技能系统文档](skills/skills.md) - 了解技能开发和配置
-- [后端验证指南](development/backend-validation-guide.md) - 开发验证流程
-- [全栈架构进度](architecture/fullstack-progress.md) - 架构改造详情
-
-### 对于运维
-- [部署指南](deployment/DEPLOYMENT.md) - 部署和配置
-- [生产化方案](solutions/production-solutions.md) - 技术选型对比
-
-### 对于用户
-- 使用前端界面上传数据文件
-- 用自然语言描述分析需求
-- 查看分析结果和生成的代码
+1. 打开 http://localhost:3000
+2. 点击 **"+"** 创建新会话
+3. 上传数据文件 (CSV/Excel/JSON)
+4. 输入分析需求，AI 自动分析
 
 ---
 
@@ -84,26 +55,38 @@ docs/
 
 ### 端口被占用
 ```bash
-# 查找占用端口的进程
+# 查找并终止占用端口的进程
 netstat -ano | findstr :3000
-# 终止进程
 taskkill /PID <进程ID> /F
 ```
 
 ### PostgreSQL 连接失败
 ```bash
-# 检查 Docker 容器状态
-docker ps
-# 重启 PostgreSQL
 docker-compose restart postgres
 ```
 
-### 前端依赖问题
-```bash
-cd frontend
-rm -rf node_modules package-lock.json
-npm install
-```
+### 会话不存在
+现已自动修复 - 系统会自动创建缺失的会话
+
+---
+
+## 文档分类
+
+### 架构设计
+- [全栈架构进度](architecture/fullstack-progress.md) - FastAPI + Next.js 改造
+
+### 部署指南
+- [部署指南](deployment/DEPLOYMENT.md) - 多种部署方式
+
+### 开发指南
+- [后端验证指南](development/backend-validation-guide.md) - 功能验证清单
+
+### 技能系统
+- [技能文档](skills/skills.md) - 技能体系核心
+- [重构总结](skills/skills-refactoring-summary.md) - 技能重构记录
+
+### 解决方案
+- [生产解决方案](solutions/production-solutions.md) - 技术选型对比
 
 ---
 
@@ -111,41 +94,13 @@ npm install
 
 ```
 skills/
-├── builtin/              # 内置技能（核心数据分析）
+├── builtin/              # 内置技能
 │   ├── describe_statistics/
 │   ├── distribution_analysis/
-│   ├── correlation_analysis/
-│   ├── categorical_analysis/
-│   └── outlier_detection/
+│   └── ...
 ├── anthropics/           # Claude 官方技能
-│   ├── xlsx/
-│   ├── pdf/
-│   └── docx/
-├── hoodini/             # 社区技能
-│   └── analytics-metrics/
 └── examples/            # 示例技能
-    └── time-series-analysis/
 ```
-
----
-
-## 文档更新记录
-
-| 日期 | 文档 | 更新内容 |
-|------|------|---------|
-| 2026-04-04 | README.md | 重组文档目录结构 |
-| 2026-04-02 | skills.md | 重写以反映新的技能体系 |
-| 2026-03-30 | DEPLOYMENT.md | 初始部署文档 |
-
----
-
-## 相关链接
-
-- [项目根目录](..)
-- [源代码](../src)
-- [测试](../tests)
-- [技能目录](../skills)
-- [前端代码](../frontend)
 
 ---
 

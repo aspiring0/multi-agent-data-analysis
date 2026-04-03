@@ -54,12 +54,11 @@ async def websocket_chat(websocket: WebSocket, session_id: str):
 
                 # 保存用户消息到数据库
                 store = SessionStore()
-                if not store.get_session(session_id):
-                    await websocket.send_json({
-                        "type": "error",
-                        "message": "会话不存在"
-                    })
-                    continue
+                session = store.get_session(session_id)
+                if not session:
+                    # 会话不存在，自动创建
+                    store.create_session(session_id, f"会话 {session_id[:6]}")
+                    logger.info(f"自动创建会话: {session_id}")
 
                 store.add_message(session_id, "user", user_message)
 
