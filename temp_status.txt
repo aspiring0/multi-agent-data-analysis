@@ -1,0 +1,3 @@
+Status values: ['已退款', '处理中', '已完成']
+Numeric columns: ['unit_price', 'quantity', 'discount', 'amount']
+First 3 rows status: ['已退款', '已退款', '处理中']
