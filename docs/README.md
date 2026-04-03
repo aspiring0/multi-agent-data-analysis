@@ -1,54 +1,113 @@
-# 文档目录
+# 多 Agent 数据分析平台 - 文档中心
 
-本目录包含项目的完整文档。
+## 快速导航
 
-## 📚 文档列表
-
-### 核心文档
-
-- **[skills.md](skills.md)** - 技能系统文档
-  - 所有可用技能的详细说明
-  - 技能格式标准和开发指南
-  - 智能体集成矩阵
-  - 技能选择指南
-
-### 部署文档
-
-- **[DEPLOYMENT.md](DEPLOYMENT.md)** - 部署指南
-  - 环境配置
-  - 依赖安装
-  - 启动步骤
-  - 常见问题
-
-### 开发文档
-
-- **[skills-refactoring-summary.md](skills-refactoring-summary.md)** - 技能体系重构总结
-  - 重构完成的工作
-  - 新的技能架构
-  - 测试验证结果
-  - 后续优化方向
+| 分类 | 说明 | 文档 |
+|-----|------|------|
+| **架构设计** | 系统架构和技术选型 | [查看 →](architecture/) |
+| **部署指南** | 部署和配置 | [查看 →](deployment/) |
+| **开发指南** | 开发和调试 | [查看 →](development/) |
+| **技能系统** | 技能开发和配置 | [查看 →](skills/) |
+| **解决方案** | 工程化方案对比 | [查看 →](solutions/) |
 
 ---
 
-## 📖 文档使用指南
+## 快速开始
+
+### 1. 环境要求
+- Python 3.10+
+- Node.js 18+
+- PostgreSQL (Docker)
+- Conda (推荐)
+
+### 2. 启动服务
+
+```bash
+# 启动 PostgreSQL
+docker-compose up -d postgres
+
+# 启动后端
+conda activate multi_agent
+python -m uvicorn backend.api.main:app --reload --port 8000
+
+# 启动前端
+cd frontend && npm run dev
+```
+
+### 3. 访问应用
+- 前端：http://localhost:3000
+- 后端 API：http://localhost:8000
+- API 文档：http://localhost:8000/docs
+
+---
+
+## 文档目录结构
+
+```
+docs/
+├── README.md                 # 本文档（文档索引）
+├── architecture/             # 架构设计
+│   └── fullstack-progress.md # 全栈架构改造进度
+├── deployment/               # 部署指南
+│   └── DEPLOYMENT.md         # 部署文档
+├── development/              # 开发指南
+│   └── backend-validation-guide.md
+├── skills/                   # 技能系统
+│   ├── skills.md             # 技能核心文档
+│   └── skills-refactoring-summary.md
+├── solutions/                # 工程化方案
+│   └── production-solutions.md
+└── troubleshooting/          # 故障排除（待创建）
+```
+
+---
+
+## 按角色查找文档
 
 ### 对于开发者
+- [技能系统文档](skills/skills.md) - 了解技能开发和配置
+- [后端验证指南](development/backend-validation-guide.md) - 开发验证流程
+- [全栈架构进度](architecture/fullstack-progress.md) - 架构改造详情
 
-如果你想：
-- **了解技能系统** → 阅读 [skills.md](skills.md)
-- **开发新技能** → 阅读 [skills.md](skills.md) 中的"开发新技能"章节
-- **理解架构变更** → 阅读 [skills-refactoring-summary.md](skills-refactoring-summary.md)
+### 对于运维
+- [部署指南](deployment/DEPLOYMENT.md) - 部署和配置
+- [生产化方案](solutions/production-solutions.md) - 技术选型对比
 
 ### 对于用户
-
-如果你想：
-- **部署项目** → 阅读 [DEPLOYMENT.md](DEPLOYMENT.md)
-- **了解可用技能** → 阅读 [skills.md](skills.md) 中的技能列表
-- **选择合适技能** → 阅读 [skills.md](skills.md) 中的"技能选择指南"
+- 使用前端界面上传数据文件
+- 用自然语言描述分析需求
+- 查看分析结果和生成的代码
 
 ---
 
-## 🗂️ 技能目录结构
+## 常见问题
+
+### 端口被占用
+```bash
+# 查找占用端口的进程
+netstat -ano | findstr :3000
+# 终止进程
+taskkill /PID <进程ID> /F
+```
+
+### PostgreSQL 连接失败
+```bash
+# 检查 Docker 容器状态
+docker ps
+# 重启 PostgreSQL
+docker-compose restart postgres
+```
+
+### 前端依赖问题
+```bash
+cd frontend
+rm -rf node_modules package-lock.json
+npm install
+```
+
+---
+
+## 技能目录结构
 
 ```
 skills/
@@ -70,24 +129,24 @@ skills/
 
 ---
 
-## 📝 文档更新记录
+## 文档更新记录
 
 | 日期 | 文档 | 更新内容 |
 |------|------|---------|
+| 2026-04-04 | README.md | 重组文档目录结构 |
 | 2026-04-02 | skills.md | 重写以反映新的技能体系 |
-| 2026-04-02 | skills-refactoring-summary.md | 创建重构总结文档 |
-| 2026-04-02 | README.md | 创建文档目录说明 |
 | 2026-03-30 | DEPLOYMENT.md | 初始部署文档 |
 
 ---
 
-## 🔗 相关链接
+## 相关链接
 
-- 项目根目录: [..](..)
-- 源代码: [../src](../src)
-- 测试: [../tests](../tests)
-- 技能目录: [../skills](../skills)
+- [项目根目录](..)
+- [源代码](../src)
+- [测试](../tests)
+- [技能目录](../skills)
+- [前端代码](../frontend)
 
 ---
 
-*最后更新: 2026-04-02*
+*最后更新：2026-04-04*
