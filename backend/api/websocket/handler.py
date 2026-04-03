@@ -84,6 +84,25 @@ async def websocket_chat(websocket: WebSocket, session_id: str):
                         config={"configurable": {"thread_id": session_id}}
                     ):
                         for node_name, node_output in chunk.items():
+                            # 发送 Agent 执行状态
+                            agent_names = {
+                                "coordinator": "调度中心",
+                                "data_parser": "数据解析",
+                                "data_profiler": "数据探索",
+                                "code_generator": "代码生成",
+                                "debugger": "代码修复",
+                                "visualizer": "可视化",
+                                "report_writer": "报告生成",
+                                "chat": "对话"
+                            }
+                            agent_display = agent_names.get(node_name, node_name)
+
+                            await websocket.send_json({
+                                "type": "agent",
+                                "agent": node_name,
+                                "agent_display": agent_display
+                            })
+
                             # 累积状态
                             for key, value in node_output.items():
                                 if key in accumulated_state:
@@ -96,6 +115,15 @@ async def websocket_chat(websocket: WebSocket, session_id: str):
                                 else:
                                     accumulated_state[key] = value
 
+                            # 发送 Skill 调用信息
+                            if "skill_calls" in node_output:
+                                for skill_call in node_output["skill_calls"]:
+                                    await websocket.send_json({
+                                        "type": "skill",
+                                        "skill": skill_call.get("skill", "unknown"),
+                                        "skill_display": skill_call.get("display_name", skill_call.get("skill", "unknown"))
+                                    })
+
                             # 发送消息内容
                             if "messages" in node_output:
                                 messages = node_output["messages"]
@@ -104,7 +132,8 @@ async def websocket_chat(websocket: WebSocket, session_id: str):
                                     if hasattr(last_msg, 'content') and last_msg.content:
                                         await websocket.send_json({
                                             "type": "chunk",
-                                            "content": last_msg.content
+                                            "content": last_msg.content,
+                                            "agent": node_name
                                         })
 
                     # 发送代码

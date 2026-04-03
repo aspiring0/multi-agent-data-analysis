@@ -37,6 +37,12 @@ export interface AppStore {
   currentSessionId: string | null
   isStreaming: boolean
   wsConnected: boolean
+  // Agent execution tracking
+  currentAgent: string | null
+  currentAgentDisplay: string | null
+  currentSkill: string | null
+  currentSkillDisplay: string | null
+  executionLog: ExecutionLogEntry[]
 
   // Session actions
   createSession: (id: string, name: string) => void
@@ -60,8 +66,24 @@ export interface AppStore {
   setStreaming: (streaming: boolean) => void
   setWsConnected: (connected: boolean) => void
 
+  // Agent execution tracking
+  setCurrentAgent: (agent: string | null, display: string | null) => void
+  setCurrentSkill: (skill: string | null, display: string | null) => void
+  addExecutionLog: (entry: ExecutionLogEntry) => void
+  clearExecutionLog: () => void
+
   // Hydration from API
   loadSessionFromApi: (session: Session) => void
+}
+
+export interface ExecutionLogEntry {
+  timestamp: number
+  type: 'agent' | 'skill' | 'chunk' | 'error'
+  agent?: string
+  agentDisplay?: string
+  skill?: string
+  skillDisplay?: string
+  content?: string
 }
 
 export const useAppStore = create<AppStore>()(
@@ -71,6 +93,7 @@ export const useAppStore = create<AppStore>()(
       currentSessionId: null,
       isStreaming: false,
       wsConnected: false,
+      executionLog: [],
 
       // ---- Session actions ----
 
@@ -210,6 +233,14 @@ export const useAppStore = create<AppStore>()(
 
       setStreaming: (streaming) => set({ isStreaming: streaming }),
       setWsConnected: (connected) => set({ wsConnected: connected }),
+
+      // ---- Execution Log ----
+
+      addExecutionLog: (entry) =>
+        set((state) => ({
+          executionLog: [...state.executionLog, entry],
+        })),
+      clearExecutionLog: () => set({ executionLog: [] }),
 
       // ---- Hydration ----
 

@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { cn } from '@/lib/utils'
+import { ExecutionPanel } from './ExecutionPanel'
 
 // ---- Code Block with Syntax Highlighting ----
 
@@ -296,6 +297,9 @@ export function ChatInterface() {
           )}
         </span>
       </div>
+
+      {/* Execution Process Panel */}
+      <ExecutionPanel />
 
       {/* Messages */}
       <ScrollArea className="flex-1 h-0">

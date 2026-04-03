@@ -18,6 +18,8 @@ export function useChat() {
   const setCode = useAppStore((s) => s.setCode)
   const setReport = useAppStore((s) => s.setReport)
   const setFigures = useAppStore((s) => s.setFigures)
+  const addExecutionLog = useAppStore((s) => s.addExecutionLog)
+  const clearExecutionLog = useAppStore((s) => s.clearExecutionLog)
 
   // 建立 WebSocket 连接
   const connect = useCallback(
@@ -33,6 +35,7 @@ export function useChat() {
             break
           case 'start':
             setStreaming(true)
+            clearExecutionLog()
             // 添加一个空的 assistant 消息占位
             addMessage(sessionId, {
               role: 'assistant',
@@ -40,9 +43,33 @@ export function useChat() {
               timestamp: Date.now(),
             })
             break
+          case 'agent':
+            // 记录 Agent 执行
+            addExecutionLog({
+              timestamp: Date.now(),
+              type: 'agent',
+              agent: data.agent,
+              agentDisplay: data.agent_display,
+            })
+            break
+          case 'skill':
+            // 记录 Skill 调用
+            addExecutionLog({
+              timestamp: Date.now(),
+              type: 'skill',
+              skill: data.skill,
+              skillDisplay: data.skill_display,
+            })
+            break
           case 'chunk':
             if (data.content) {
               setStreamingContent(sessionId, data.content)
+              addExecutionLog({
+                timestamp: Date.now(),
+                type: 'chunk',
+                content: data.content.substring(0, 100),
+                agent: data.agent,
+              })
             }
             break
           case 'code':
@@ -81,7 +108,7 @@ export function useChat() {
         console.error('WebSocket connect failed:', err)
       }
     },
-    [addMessage, setStreamingContent, setStreaming, setWsConnected, setCode, setReport, setFigures],
+    [addMessage, setStreamingContent, setStreaming, setWsConnected, setCode, setReport, setFigures, addExecutionLog, clearExecutionLog],
   )
 
   // 发送消息
