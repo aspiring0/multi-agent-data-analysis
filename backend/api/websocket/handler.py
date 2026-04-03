@@ -3,8 +3,8 @@ WebSocket 处理器
 
 处理实时聊天通信和流式响应。
 """
-import json
 import logging
+from pathlib import Path
 from fastapi import WebSocket, WebSocketDisconnect
 from langchain_core.messages import HumanMessage
 
@@ -23,7 +23,6 @@ async def websocket_chat(websocket: WebSocket, session_id: str):
         session_id: 会话 ID
     """
     await websocket.accept()
-
     logger.info(f"WebSocket 连接建立: session_id={session_id}")
 
     try:
@@ -75,35 +74,76 @@ async def websocket_chat(websocket: WebSocket, session_id: str):
                 }
 
                 # 发送开始标记
-                await websocket.send_json({
-                    "type": "start"
-                })
+                await websocket.send_json({"type": "start"})
 
                 # 流式处理
                 try:
+                    accumulated_state = {}
+
                     async for chunk in graph.astream(
                         state,
                         config={"configurable": {"thread_id": session_id}}
                     ):
-                        if "messages" in chunk:
-                            messages = chunk["messages"]
-                            if messages:
-                                last_msg = messages[-1]
-                                if hasattr(last_msg, 'content') and last_msg.content:
-                                    # 发送内容片段
-                                    await websocket.send_json({
-                                        "type": "chunk",
-                                        "content": last_msg.content
-                                    })
+                        for node_name, node_output in chunk.items():
+                            # 累积状态
+                            for key, value in node_output.items():
+                                if key in accumulated_state:
+                                    if isinstance(value, list) and isinstance(accumulated_state[key], list):
+                                        accumulated_state[key].extend(value)
+                                    elif isinstance(value, dict) and isinstance(accumulated_state[key], dict):
+                                        accumulated_state[key].update(value)
+                                    else:
+                                        accumulated_state[key] = value
+                                else:
+                                    accumulated_state[key] = value
+
+                            # 发送消息内容
+                            if "messages" in node_output:
+                                messages = node_output["messages"]
+                                if messages:
+                                    last_msg = messages[-1]
+                                    if hasattr(last_msg, 'content') and last_msg.content:
+                                        await websocket.send_json({
+                                            "type": "chunk",
+                                            "content": last_msg.content
+                                        })
+
+                    # 发送代码
+                    current_code = accumulated_state.get("current_code", "") or accumulated_state.get("code", "")
+                    if current_code:
+                        await websocket.send_json({
+                            "type": "code",
+                            "content": current_code
+                        })
+
+                    # 发送报告
+                    report = accumulated_state.get("report", "")
+                    if report:
+                        await websocket.send_json({
+                            "type": "report",
+                            "content": report
+                        })
+
+                    # 发送图表路径（转换为 HTTP URL）
+                    figures = accumulated_state.get("figures", [])
+                    if figures:
+                        figure_urls = []
+                        for fig_path in figures:
+                            if isinstance(fig_path, str):
+                                if "outputs" in fig_path:
+                                    relative_path = fig_path.split("outputs")[-1].replace("\\", "/").lstrip("/")
+                                    figure_urls.append(f"/static/figures/{relative_path}")
+                                else:
+                                    fig_name = Path(fig_path).name
+                                    figure_urls.append(f"/static/figures/{fig_name}")
+                        if figure_urls:
+                            await websocket.send_json({
+                                "type": "figures",
+                                "content": figure_urls
+                            })
 
                     # 发送完成标记
-                    await websocket.send_json({
-                        "type": "done"
-                    })
-
-                    # 保存完整的 AI 回复
-                    # 注意：这里需要从流式处理中收集完整内容
-                    # 简化实现，实际可能需要在流式过程中累积内容
+                    await websocket.send_json({"type": "done"})
 
                 except Exception as e:
                     logger.error(f"Graph 执行错误: {e}", exc_info=True)

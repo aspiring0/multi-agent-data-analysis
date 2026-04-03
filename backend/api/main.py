@@ -1,7 +1,9 @@
 """FastAPI 应用入口"""
 
+from pathlib import Path
 from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from backend.api.routes import chat, sessions, upload
 from backend.api.websocket.handler import websocket_chat
 
@@ -20,6 +22,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 挂载静态文件目录（图表）- 图表保存在 data/outputs/figures_xxx/ 下
+FIGURES_DIR = Path(__file__).parent.parent.parent / "data" / "outputs"
+FIGURES_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/static/figures", StaticFiles(directory=str(FIGURES_DIR)), name="figures")
 
 # 注册路由
 app.include_router(chat.router, prefix="/api/chat")
