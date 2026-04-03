@@ -76,9 +76,9 @@ function CodeBlock({
 
 function MarkdownContent({ content }: { content: string }) {
   return (
-    <ReactMarkdown
-      className="prose prose-sm dark:prose-invert max-w-none"
-      components={{
+    <div className="prose prose-sm dark:prose-invert max-w-none">
+      <ReactMarkdown
+        components={{
         code({ className, children, ...props }) {
           const match = /language-(\w+)/.exec(className || '')
           const codeString = String(children).replace(/\n$/, '')
@@ -134,9 +134,10 @@ function MarkdownContent({ content }: { content: string }) {
           )
         },
       }}
-    >
-      {content}
-    </ReactMarkdown>
+      >
+        {content}
+      </ReactMarkdown>
+    </div>
   )
 }
 
