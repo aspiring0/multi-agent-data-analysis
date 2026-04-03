@@ -109,7 +109,8 @@ _loaded_dataframes = {{}}
 for _name, _path in DATA_FILES.items():
     try:
         if _path.endswith(".csv") or _path.endswith(".tsv"):
-            _loaded_dataframes[_name] = pd.read_csv(_path)
+            # utf-8-sig 自动处理 BOM
+            _loaded_dataframes[_name] = pd.read_csv(_path, encoding='utf-8-sig')
         elif _path.endswith(".xlsx") or _path.endswith(".xls"):
             _loaded_dataframes[_name] = pd.read_excel(_path)
         elif _path.endswith(".json"):
