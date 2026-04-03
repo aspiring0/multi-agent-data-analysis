@@ -4,6 +4,34 @@
 
 在开始前端开发前，确保后端所有功能正常工作。
 
+## 🧪 测试套件
+
+### 后端测试 (pytest)
+
+```bash
+# 运行所有后端测试
+python -m pytest tests/ -v
+
+# 仅运行 WebSocket 测试
+python -m pytest tests/backend/test_websocket.py -v
+
+# 运行 API 验证脚本
+python tests/backend/test_backend_api.py
+```
+
+### 前端测试 (Jest)
+
+```bash
+# 运行所有前端测试
+cd frontend && npm test
+
+# 监听模式
+cd frontend && npm run test:watch
+
+# 覆盖率报告
+cd frontend && npm run test:coverage
+```
+
 ## 📋 验证清单
 
 ### 阶段 1: 环境准备
