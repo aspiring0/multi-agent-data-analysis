@@ -4,11 +4,11 @@
 
 | 分类 | 说明 | 文档 |
 |-----|------|------|
+| **API 参考** | REST API + WebSocket | [查看 →](api/REFERENCE.md) |
 | **架构设计** | 系统架构和技术选型 | [查看 →](architecture/) |
 | **部署指南** | 部署和配置 | [查看 →](deployment/) |
 | **开发指南** | 开发和调试 | [查看 →](development/) |
 | **技能系统** | 技能开发和配置 | [查看 →](skills/) |
-| **解决方案** | 工程化方案对比 | [查看 →](solutions/) |
 
 ---
 
@@ -93,8 +93,11 @@ docker-compose restart postgres
 
 ## 文档分类
 
+### API 参考
+- [API 参考文档](api/REFERENCE.md) - REST API + WebSocket 完整文档
+
 ### 架构设计
-- [全栈架构进度](architecture/fullstack-progress.md) - FastAPI + Next.js 改造
+- [全栈架构进度](architecture/fullstack-progress.md) - FastAPI + Next.js 架构
 
 ### 部署指南
 - [部署指南](deployment/DEPLOYMENT.md) - 多种部署方式
