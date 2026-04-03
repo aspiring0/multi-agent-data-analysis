@@ -225,5 +225,80 @@ cd frontend && npm run test:coverage
 
 ---
 
+## 关键机制详解
+
+### 1. Coordinator 路由规则（优先级）
+
+Coordinator 使用优先级路由确保任务分发给正确的 Agent：
+
+| 优先级 | 规则 | 目标 Agent | 示例 |
+|--------|------|------------|------|
+| 1（最高） | 具体分析任务 | code_generator | "分析占比"、"计算排名"、"对比趋势" |
+| 2 | 整体概览 | data_profiler | "看看数据"、"数据概况" |
+| 3 | 可视化 | visualizer | "画图"、"图表"、"可视化" |
+| 4 | 数据加载 | data_parser | 上传文件、加载数据 |
+| 5 | 报告生成 | report_writer | "生成报告"、"总结" |
+| 6（最低） | 兜底对话 | chat | 与数据分析无关的闲聊 |
+
+**路由代码参考**: [`src/agents/coordinator.py`](src/agents/coordinator.py)
+
+### 2. Sanity Check 模式
+
+所有 Skill 模板均包含 Sanity Check，确保数据有效性：
+
+```python
+# === Sanity Check: 验证数据 ===
+if df is None:
+    print("❌ 数据未加载 (df is None)")
+elif df.empty:
+    print("❌ 数据为空 (df is empty)")
+else:
+    print(f"✅ 数据有效: {len(df)} 行, {len(df.columns)} 列")
+    # 执行实际分析逻辑...
+```
+
+**作用**：
+- 提前检测空数据或未加载状态
+- 提供清晰的错误提示
+- 避免后续代码因数据问题崩溃
+
+**应用文件**：
+- [`skills/builtin/describe_statistics/generate.py`](skills/builtin/describe_statistics/generate.py)
+- [`skills/builtin/distribution_analysis/generate.py`](skills/builtin/distribution_analysis/generate.py)
+- [`skills/builtin/correlation_analysis/generate.py`](skills/builtin/correlation_analysis/generate.py)
+
+### 3. 错误恢复流程
+
+```
+CodeGenerator/Visualizer
+        │
+        ▼ 执行代码
+    ┌───────────┐
+    │ 成功？    │
+    └─────┬─────┘
+          │
+     No   │   Yes
+   ┌──────┴──────┐
+   ▼             ▼
+Debugger      END
+   │
+   ▼ 最多 3 次
+┌────────────┐
+│ LLM 修复   │
+└─────┬──────┘
+      │
+      ▼
+  重新执行
+```
+
+**重试机制**：
+- `MAX_RETRIES = 3`：最多重试 3 次
+- 每次修复提供完整错误上下文（原始代码 + stderr + 数据信息）
+- 超过重试次数后降级到人工提示
+
+**参考文件**：[`src/agents/debugger.py`](src/agents/debugger.py)
+
+---
+
 *最后更新: 2026-04-04*
 *状态: 全栈架构改造完成*

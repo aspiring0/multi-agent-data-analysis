@@ -67,6 +67,8 @@ def data_profiler_node(state: AnalysisState) -> dict[str, Any]:
     all_results = []
     all_figures = []
     all_codes = []
+    failed_skills = []  # 跟踪失败的 Skill
+    accumulated_stderr = []  # 收集所有错误信息
 
     for skill_name in skill_names:
         skill = registry.get(skill_name)
@@ -97,6 +99,8 @@ def data_profiler_node(state: AnalysisState) -> dict[str, Any]:
             all_results.append(
                 f"### {skill.meta.display_name}\n\n⚠️ 执行出现问题: {stderr[:200]}"
             )
+            failed_skills.append(skill_name)
+            accumulated_stderr.append(f"[{skill_name}] {stderr}")
 
     # 汇总结果
     if all_results:
@@ -107,8 +111,16 @@ def data_profiler_node(state: AnalysisState) -> dict[str, Any]:
     else:
         summary = "分析未产生结果，请检查数据集格式。"
 
+    # 如果有失败，添加提示
+    if failed_skills:
+        summary += f"\n\n---\n⚠️ 有 {len(failed_skills)} 个分析任务失败，正在尝试修复..."
+
     # 构建完整代码记录
     full_code = "\n\n".join(all_codes)
+
+    # 判断是否需要触发 Debugger
+    has_failures = len(failed_skills) > 0
+    combined_stderr = "\n".join(accumulated_stderr) if accumulated_stderr else ""
 
     return {
         "messages": [AIMessage(content=summary)],
@@ -116,10 +128,12 @@ def data_profiler_node(state: AnalysisState) -> dict[str, Any]:
         "code_result": {
             "code": full_code,
             "stdout": "\n".join(all_results),
-            "stderr": "",
-            "success": True,
+            "stderr": combined_stderr,
+            "success": not has_failures,  # 只有没有失败时才算成功
             "figures": all_figures,
             "dataframes": {},
         },
         "figures": list(state.get("figures", [])) + all_figures,
+        "needs_debug": has_failures,  # 新增：标记是否需要修复
+        "retry_count": 0 if has_failures else state.get("retry_count", 0),
     }

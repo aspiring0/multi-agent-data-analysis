@@ -1,12 +1,11 @@
 """
-Graph Builder — 核心图构建器 (v3)
+Graph Builder — 核心图构建器 (v4)
 将所有 Agent Node 组装成一个完整的 LangGraph StateGraph。
 
-架构升级（阶段3）：
-1. Visualizer Agent 替换占位（LLM 驱动可视化）
-2. ReportWriter Agent 替换占位（Markdown 报告生成）
-3. Visualizer 也接入 CodeGenerator→Debugger 自修复循环
-4. 加载社区 Skill
+架构升级（阶段4）：
+1. DataProfiler 失败时也触发 Debugger 修复
+2. 所有代码执行节点都接入自修复循环
+3. 更健壮的错误恢复机制
 
 Graph 结构：
 
@@ -27,10 +26,13 @@ parser profiler  │             │        writer
  │       │    should_retry  should_retry  │          │
  │       │    ┌───┴───┐    ┌───┴───┐      │          │
  │       │  retry   done retry   done     │          │
- │       │    ↓       ↓    ↓       ↓      │          │
- │       │  debugger END  debugger END    │          │
- │       │    ↻                            │          │
- └───────┴────────────────────────────────┴──────────┘
+ │    should_retry  ↓    ↓       ↓        │          │
+ │    ┌───┴───┐  debugger END             │          │
+ │  retry   done                          │          │
+ │    ↓       ↓                           │          │
+ │  debugger END                          │          │
+ │    ↻                                    │          │
+ └─────────────────────────────────────────┴──────────┘
                       │
                  ┌────▼────┐
                  │   END   │
@@ -183,7 +185,18 @@ def build_analysis_graph(
 
     # 其他 Agent → END（单次执行）
     graph.add_edge("data_parser", END)
-    graph.add_edge("data_profiler", END)
+
+    # === DataProfiler → Debugger 自修复循环（新增）===
+    # DataProfiler 执行 Skill 失败时也触发修复
+    graph.add_conditional_edges(
+        "data_profiler",
+        should_retry,
+        {
+            "retry": "debugger",
+            "done": END,
+        },
+    )
+
     graph.add_edge("report_writer", END)
     graph.add_edge("chat", END)
 
