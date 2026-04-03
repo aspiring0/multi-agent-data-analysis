@@ -32,6 +32,8 @@ if df is None:
 elif df.empty:
     print("❌ 数据为空 (df is empty)")
 else:
+    # 清理列名中的 BOM 字符（Excel 导出的 CSV 常见问题）
+    df.columns = [col.replace('\\ufeff', '') if isinstance(col, str) else col for col in df.columns]
     print(f"✅ 数据有效: {{len(df)}} 行, {{len(df.columns)}} 列")
 
     cols = {columns}

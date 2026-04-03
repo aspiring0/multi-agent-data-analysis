@@ -1,14 +1,16 @@
 """
-DataProfiler Agent — 数据探索专家
+DataProfiler Agent — 数据探索专家 (v5 - 动态 Skill 发现)
+
 职责：
-1. 根据 Skill Registry 中的分析技能，自动生成数据探索代码
-2. 在沙箱中执行代码
+1. 根据用户意图动态选择分析 Skills
+2. 在沙箱中执行生成的代码
 3. 汇总分析结果返回给用户
 
-核心特点：
-- 不硬编码任何分析逻辑，通过 Skill 生成代码
-- 代码在沙箱中安全执行
-- 结果包含文本输出 + 可视化图表
+核心升级（v5）：
+- 不再硬编码 Skill 列表
+- 使用 SkillSelector 动态发现
+- 根据数据上下文智能选择
+- 支持新增 Skill 自动参与分析
 """
 from __future__ import annotations
 
@@ -19,26 +21,28 @@ from langchain_core.messages import AIMessage
 
 from src.graph.state import AnalysisState
 from src.sandbox.executor import execute_code
-from src.skills.base import get_registry
+from src.skills.selector import SkillSelector, build_data_context_from_state
 
 logger = logging.getLogger(__name__)
 
 
 def data_profiler_node(state: AnalysisState) -> dict[str, Any]:
     """
-    DataProfiler Node：自动运行数据探索分析
+    DataProfiler Node：智能数据探索分析 (v5)
 
     工作流程：
     1. 检查是否有已加载的数据集
-    2. 从 Skill Registry 获取分析 Skill
-    3. 生成并执行分析代码（描述统计 + 分布 + 相关性）
-    4. 返回结果
+    2. 构建数据上下文
+    3. 使用 SkillSelector 动态选择相关 Skills
+    4. 生成并执行分析代码
+    5. 返回结果（失败时触发 Debugger）
 
-    读取：state["datasets"], state["active_dataset_index"]
+    读取：state["datasets"], state["active_dataset_index"], state["intent"]
     写入：state["messages"], state["code_result"], state["figures"]
     """
     datasets = state.get("datasets", [])
     active_idx = state.get("active_dataset_index", 0)
+    intent = state.get("intent", "")
 
     if not datasets:
         return {
@@ -54,26 +58,38 @@ def data_profiler_node(state: AnalysisState) -> dict[str, Any]:
     # 当前活跃数据集
     active_ds = datasets[min(active_idx, len(datasets) - 1)]
 
-    # 获取 Skill Registry
-    registry = get_registry()
+    # === v5 核心升级：动态 Skill 发现 ===
+    selector = SkillSelector()
+    data_context = build_data_context_from_state(state)
 
-    # 选择要执行的 Skill（默认做全套探索）
-    skill_names = [
-        "describe_statistics",
-        "distribution_analysis",
-        "correlation_analysis",
-    ]
+    # 根据意图和数据上下文选择 Skills
+    selected_skills = selector.select_skills_for_intent(
+        intent=intent or "数据探索分析",
+        data_context=data_context,
+        max_skills=5,  # 最多执行 5 个 Skills
+    )
 
+    # 如果没有匹配到任何 Skill，使用默认分析技能
+    if not selected_skills:
+        logger.info("未匹配到特定 Skill，使用默认分析技能")
+        # 获取所有分析类 Skills
+        all_analysis = selector.get_analysis_skills()
+        selected_skills = all_analysis[:3]  # 取前 3 个
+
+    # 记录选择的 Skills
+    skill_names = [s.meta.name for s in selected_skills]
+    logger.info(f"DataProfiler 选中 Skills: {skill_names}")
+
+    # 执行选中的 Skills
     all_results = []
     all_figures = []
     all_codes = []
-    failed_skills = []  # 跟踪失败的 Skill
-    accumulated_stderr = []  # 收集所有错误信息
+    failed_skills = []
+    accumulated_stderr = []
 
-    for skill_name in skill_names:
-        skill = registry.get(skill_name)
-        if skill is None or skill.generate_code is None:
-            logger.warning(f"Skill 不存在或无代码生成器: {skill_name}")
+    for skill in selected_skills:
+        if skill.generate_code is None:
+            logger.debug(f"Skill {skill.meta.name} 无代码生成器，跳过")
             continue
 
         # 生成代码
@@ -99,13 +115,14 @@ def data_profiler_node(state: AnalysisState) -> dict[str, Any]:
             all_results.append(
                 f"### {skill.meta.display_name}\n\n⚠️ 执行出现问题: {stderr[:200]}"
             )
-            failed_skills.append(skill_name)
-            accumulated_stderr.append(f"[{skill_name}] {stderr}")
+            failed_skills.append(skill.meta.name)
+            accumulated_stderr.append(f"[{skill.meta.name}] {stderr}")
 
     # 汇总结果
     if all_results:
         summary = (
             f"## 🔍 数据探索分析: {active_ds['file_name']}\n\n"
+            f"**分析技能**: {', '.join(skill_names)}\n\n"
             + "\n\n".join(all_results)
         )
     else:
@@ -129,11 +146,11 @@ def data_profiler_node(state: AnalysisState) -> dict[str, Any]:
             "code": full_code,
             "stdout": "\n".join(all_results),
             "stderr": combined_stderr,
-            "success": not has_failures,  # 只有没有失败时才算成功
+            "success": not has_failures,
             "figures": all_figures,
             "dataframes": {},
         },
         "figures": list(state.get("figures", [])) + all_figures,
-        "needs_debug": has_failures,  # 新增：标记是否需要修复
+        "needs_debug": has_failures,
         "retry_count": 0 if has_failures else state.get("retry_count", 0),
     }

@@ -30,6 +30,9 @@ if df is None:
 elif df.empty:
     print("❌ 数据为空 (df is empty)")
 else:
+    # 清理列名中的 BOM 字符（Excel 导出的 CSV 常见问题）
+    df.columns = [col.replace('\\ufeff', '') if isinstance(col, str) else col for col in df.columns]
+
     numeric_df = df.select_dtypes(include=["number"])
 
     if numeric_df.shape[1] < 2:
