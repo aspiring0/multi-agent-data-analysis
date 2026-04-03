@@ -51,6 +51,27 @@ cd frontend && npm run dev
 
 ---
 
+## 当前版本功能
+
+### 前端 UI (Phase 2.2 已完成)
+
+| 组件 | 功能 |
+|------|------|
+| **ChatInterface** | Markdown 渲染 + 代码语法高亮 + 复制按钮 |
+| **Sidebar** | 会话搜索 + 日期分组 + 批量管理 |
+| **RightPanel** | 代码高亮 + 图表预览 + 报告渲染 |
+
+### 后端架构
+
+| 模块 | 状态 |
+|------|------|
+| 8 个核心 Agent | ✅ 完成 |
+| 13 个 Skill 体系 | ✅ 完成 |
+| PostgreSQL Checkpointer | ✅ 完成 |
+| WebSocket 实时通信 | ✅ 完成 |
+
+---
+
 ## 常见问题
 
 ### 端口被占用

@@ -5,6 +5,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
 import { useState } from 'react'
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
+import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
+import ReactMarkdown from 'react-markdown'
 
 // ---- Code Preview (文件列表形式) ----
 
@@ -67,9 +70,19 @@ function CodePreview() {
       {/* 代码内容（可折叠） */}
       {showFullCode && (
         <ScrollArea className="flex-1">
-          <pre className="rounded-md bg-slate-950 p-4 text-sm text-slate-50 overflow-x-auto">
-            <code>{code}</code>
-          </pre>
+          <SyntaxHighlighter
+            language="python"
+            style={oneDark}
+            customStyle={{
+              margin: 0,
+              borderRadius: '0.5rem',
+              fontSize: '0.8rem',
+              maxHeight: '100%',
+            }}
+            showLineNumbers
+          >
+            {code}
+          </SyntaxHighlighter>
         </ScrollArea>
       )}
     </div>
@@ -137,9 +150,9 @@ function ReportView() {
       {/* 报告内容（可折叠） */}
       {showFullReport && (
         <ScrollArea className="flex-1 p-4">
-          <div className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap">
+          <ReactMarkdown className="prose prose-sm dark:prose-invert max-w-none">
             {report}
-          </div>
+          </ReactMarkdown>
         </ScrollArea>
       )}
     </div>

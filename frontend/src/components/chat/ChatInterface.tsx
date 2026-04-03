@@ -1,6 +1,9 @@
 'use client'
 
-import { useRef, useEffect } from 'react'
+import { useRef, useEffect, useState, useCallback, KeyboardEvent } from 'react'
+import ReactMarkdown from 'react-markdown'
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
+import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { useAppStore } from '@/lib/store'
 import { useChat } from '@/hooks/useChat'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -8,82 +11,132 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { cn } from '@/lib/utils'
-import { useState, useCallback, KeyboardEvent } from 'react'
 
-// ---- Code Block (可折叠) ----
+// ---- Code Block with Syntax Highlighting ----
 
-function CodeBlock({ code, language = 'python' }: { code: string; language?: string }) {
-  const [expanded, setExpanded] = useState(false)
-  const lines = code.split('\n')
-  const previewLines = 5
-  const hasMore = lines.length > previewLines
+function CodeBlock({
+  code,
+  language = 'python',
+  inline = false
+}: {
+  code: string
+  language?: string
+  inline?: boolean
+}) {
+  const [copied, setCopied] = useState(false)
 
   const handleCopy = () => {
     navigator.clipboard.writeText(code)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  if (inline) {
+    return (
+      <code className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-sm font-mono">
+        {code}
+      </code>
+    )
   }
 
   return (
-    <div className="my-2 rounded-lg border bg-slate-950 overflow-hidden">
+    <div className="my-2 rounded-lg overflow-hidden border border-slate-700">
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-1.5 bg-slate-900 border-b border-slate-800">
-        <span className="text-xs text-slate-400">{language}</span>
-        <div className="flex items-center gap-1">
-          <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-slate-400 hover:text-white" onClick={handleCopy}>
-            复制
-          </Button>
-          {hasMore && (
-            <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-slate-400 hover:text-white" onClick={() => setExpanded(!expanded)}>
-              {expanded ? '收起' : `展开 (${lines.length} 行)`}
-            </Button>
-          )}
-        </div>
+      <div className="flex items-center justify-between px-3 py-1.5 bg-slate-800 text-slate-300">
+        <span className="text-xs font-medium">{language || 'code'}</span>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-6 px-2 text-xs text-slate-400 hover:text-white"
+          onClick={handleCopy}
+        >
+          {copied ? '✓ 已复制' : '复制'}
+        </Button>
       </div>
       {/* Code */}
-      <pre className="p-3 text-xs text-slate-50 overflow-x-auto">
-        <code>
-          {expanded ? code : lines.slice(0, previewLines).join('\n')}
-          {!expanded && hasMore && '\n...'}
-        </code>
-      </pre>
+      <SyntaxHighlighter
+        language={language || 'text'}
+        style={oneDark}
+        customStyle={{
+          margin: 0,
+          padding: '0.75rem',
+          fontSize: '0.8rem',
+          maxHeight: '400px',
+          overflow: 'auto',
+        }}
+        showLineNumbers={code.split('\n').length > 5}
+      >
+        {code}
+      </SyntaxHighlighter>
     </div>
   )
 }
 
-// ---- Message Content Parser (解析文本和代码块) ----
+// ---- Markdown Renderer ----
 
-function MessageContent({ content }: { content: string }) {
-  // 解析代码块: ```language\ncode```
-  const parts: Array<{ type: 'text' | 'code'; content: string; language?: string }> = []
-  const codeBlockRegex = /```(\w*)\n([\s\S]*?)```/g
-  let lastIndex = 0
-  let match
-
-  while ((match = codeBlockRegex.exec(content)) !== null) {
-    // 添加代码块之前的文本
-    if (match.index > lastIndex) {
-      parts.push({ type: 'text', content: content.slice(lastIndex, match.index) })
-    }
-    // 添加代码块
-    parts.push({ type: 'code', content: match[2].trim(), language: match[1] || 'python' })
-    lastIndex = match.index + match[0].length
-  }
-  // 添加剩余文本
-  if (lastIndex < content.length) {
-    parts.push({ type: 'text', content: content.slice(lastIndex) })
-  }
-
-  if (parts.length === 0) {
-    return <>{content}</>
-  }
-
+function MarkdownContent({ content }: { content: string }) {
   return (
-    <>
-      {parts.map((part, i) => (
-        part.type === 'code'
-          ? <CodeBlock key={i} code={part.content} language={part.language} />
-          : <span key={i} className="whitespace-pre-wrap">{part.content}</span>
-      ))}
-    </>
+    <ReactMarkdown
+      className="prose prose-sm dark:prose-invert max-w-none"
+      components={{
+        code({ className, children, ...props }) {
+          const match = /language-(\w+)/.exec(className || '')
+          const codeString = String(children).replace(/\n$/, '')
+          const isInline = !match && !codeString.includes('\n')
+
+          if (isInline) {
+            return <code className={className} {...props}>{children}</code>
+          }
+
+          return (
+            <CodeBlock
+              code={codeString}
+              language={match ? match[1] : 'text'}
+            />
+          )
+        },
+        pre({ children }) {
+          return <>{children}</>
+        },
+        a({ href, children }) {
+          return (
+            <a
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary hover:underline"
+            >
+              {children}
+            </a>
+          )
+        },
+        table({ children }) {
+          return (
+            <div className="overflow-x-auto my-2">
+              <table className="min-w-full border-collapse border border-slate-300 dark:border-slate-600">
+                {children}
+              </table>
+            </div>
+          )
+        },
+        th({ children }) {
+          return (
+            <th className="border border-slate-300 dark:border-slate-600 px-3 py-2 bg-slate-100 dark:bg-slate-800 font-semibold text-left">
+              {children}
+            </th>
+          )
+        },
+        td({ children }) {
+          return (
+            <td className="border border-slate-300 dark:border-slate-600 px-3 py-2">
+              {children}
+            </td>
+          )
+        },
+      }}
+    >
+      {content}
+    </ReactMarkdown>
   )
 }
 
@@ -109,13 +162,17 @@ function MessageBubble({
       )}
       <div
         className={cn(
-          'max-w-[75%] rounded-lg px-4 py-2.5 text-sm leading-relaxed',
+          'max-w-[80%] rounded-lg px-4 py-2.5 text-sm leading-relaxed',
           isUser
-            ? 'bg-primary text-primary-foreground whitespace-pre-wrap'
+            ? 'bg-primary text-primary-foreground'
             : 'bg-muted text-foreground',
         )}
       >
-        {isUser ? content : <MessageContent content={content} />}
+        {isUser ? (
+          <span className="whitespace-pre-wrap">{content}</span>
+        ) : (
+          <MarkdownContent content={content} />
+        )}
         {streaming && <span className="animate-pulse">▊</span>}
       </div>
       {isUser && (
@@ -162,7 +219,7 @@ function ChatInput({
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="输入你的分析需求..."
+          placeholder="输入你的分析需求... (Shift+Enter 换行)"
           disabled={disabled}
           className="min-h-[44px] max-h-[200px] resize-none"
           rows={1}
@@ -208,16 +265,17 @@ export function ChatInterface() {
   if (!currentSession) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-4 p-8">
-        <div className="text-4xl">🤖</div>
-        <h2 className="text-xl font-semibold">多 Agent 数据分析平台</h2>
-        <p className="text-muted-foreground text-center max-w-md">
-          上传你的数据文件，用自然语言描述分析需求，AI Agent 团队会自动协作完成分析。
+        <div className="text-5xl">🤖</div>
+        <h2 className="text-2xl font-semibold">多 Agent 数据分析平台</h2>
+        <p className="text-muted-foreground text-center max-w-md leading-relaxed">
+          上传你的数据文件，用自然语言描述分析需求，<br />
+          AI Agent 团队会自动协作完成分析。
         </p>
-        <Button
-          onClick={() => createSession(Date.now().toString(36), '新对话')}
-        >
-          开始新对话
-        </Button>
+        <div className="flex gap-3 mt-2">
+          <Button onClick={() => createSession(Date.now().toString(36), '新对话')}>
+            开始新对话
+          </Button>
+        </div>
       </div>
     )
   }
@@ -228,7 +286,13 @@ export function ChatInterface() {
       <div className="border-b px-4 py-3 flex items-center justify-between">
         <h3 className="font-medium truncate">{currentSession.name}</h3>
         <span className="text-xs text-muted-foreground">
-          {isStreaming ? '分析中...' : `${messages.length} 条消息`}
+          {isStreaming ? (
+            <span className="flex items-center gap-1">
+              <span className="animate-spin">⏳</span> 分析中...
+            </span>
+          ) : (
+            `${messages.length} 条消息`
+          )}
         </span>
       </div>
 
