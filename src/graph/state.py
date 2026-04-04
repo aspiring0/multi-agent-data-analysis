@@ -50,6 +50,7 @@ class AnalysisState(TypedDict, total=False):
     多 Agent 数据分析平台的全局状态
 
     字段分组：
+    - session_id: 会话标识（用于数据隔离和文件获取）
     - messages: 对话历史（LangGraph 原生 add_messages reducer）
     - intent / task_type: 调度层的意图识别结果
     - datasets: 已上传/已解析的数据集
@@ -57,6 +58,9 @@ class AnalysisState(TypedDict, total=False):
     - report: 最终报告
     - error: 错误信息
     """
+
+    # ---- 会话标识 ----
+    session_id: str           # 会话 ID（用于数据隔离和从数据库获取文件）
 
     # ---- 对话历史 ----
     messages: Annotated[list, add_messages]

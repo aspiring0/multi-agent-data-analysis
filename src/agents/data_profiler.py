@@ -37,26 +37,41 @@ def data_profiler_node(state: AnalysisState) -> dict[str, Any]:
     4. 生成并执行分析代码
     5. 返回结果（失败时触发 Debugger）
 
-    读取：state["datasets"], state["active_dataset_index"], state["intent"]
+    读取：state["datasets"], state["active_dataset_index"], state["intent"], state["session_id"]
     写入：state["messages"], state["code_result"], state["figures"]
     """
     datasets = state.get("datasets", [])
     active_idx = state.get("active_dataset_index", 0)
     intent = state.get("intent", "")
+    session_id = state.get("session_id", "")
 
+    # === 数据验证：拒绝幻觉 ===
     if not datasets:
         return {
             "messages": [
                 AIMessage(
-                    content="❌ 暂无数据集。请先上传数据文件，然后我才能进行探索分析。\n"
-                    "例如：`请帮我分析 /path/to/data.csv`"
+                    content="❌ **暂无数据集**\n\n请先上传数据文件（CSV、Excel、JSON），然后我才能进行探索分析。"
                 )
             ],
-            "error": "无数据集",
+            "error": "无数据集 - 请上传文件",
+        }
+
+    # 验证数据集有有效的存储信息
+    valid_datasets = []
+    for ds in datasets:
+        if ds.get("file_storage_id") or ds.get("file_path"):
+            valid_datasets.append(ds)
+
+    if not valid_datasets:
+        return {
+            "messages": [
+                AIMessage(content="❌ **数据集无效**\n\n上传的文件可能已损坏或丢失。请重新上传数据文件。")
+            ],
+            "error": "数据集无有效存储信息",
         }
 
     # 当前活跃数据集
-    active_ds = datasets[min(active_idx, len(datasets) - 1)]
+    active_ds = valid_datasets[min(active_idx, len(valid_datasets) - 1)]
 
     # === v5 核心升级：动态 Skill 发现 ===
     selector = SkillSelector()
@@ -96,10 +111,11 @@ def data_profiler_node(state: AnalysisState) -> dict[str, Any]:
         code = skill.generate_code()
         all_codes.append(f"# === {skill.meta.display_name} ===\n{code}")
 
-        # 在沙箱中执行
+        # 在沙箱中执行（传递 session_id 以从数据库获取文件）
         result = execute_code(
             code=code,
-            datasets=datasets,
+            datasets=valid_datasets,
+            session_id=session_id,
         )
 
         if result["success"]:

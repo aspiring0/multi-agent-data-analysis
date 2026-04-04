@@ -55,6 +55,7 @@ async def chat(request: ChatRequest):
 
         # 构建状态
         state = {
+            "session_id": request.session_id,  # 传递 session_id 用于数据获取
             "messages": [HumanMessage(content=request.message)],
             "datasets": store.get_datasets(request.session_id),
             "active_dataset_index": 0,

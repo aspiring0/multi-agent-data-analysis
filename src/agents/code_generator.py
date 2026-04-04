@@ -130,19 +130,35 @@ def code_generator_node(state: AnalysisState) -> dict[str, Any]:
     3. 在沙箱中执行代码
     4. 返回执行结果
 
-    读取：state["messages"], state["datasets"]
+    读取：state["messages"], state["datasets"], state["session_id"]
     写入：state["current_code"], state["code_result"], state["messages"], state["figures"]
     """
     llm = get_llm()
     messages = state.get("messages", [])
     datasets = state.get("datasets", [])
+    session_id = state.get("session_id", "")
 
+    # === 数据验证：拒绝幻觉 ===
     if not datasets:
         return {
             "messages": [
-                AIMessage(content="❌ 请先上传数据文件，然后告诉我你想做什么分析。")
+                AIMessage(content="❌ **请先上传数据文件**\n\n我无法在没有数据的情况下进行分析。请上传 CSV、Excel 或 JSON 文件后，再告诉我你想做什么分析。")
             ],
-            "error": "无数据集",
+            "error": "无数据集 - 请上传文件",
+        }
+
+    # 验证数据集有有效的存储信息
+    valid_datasets = []
+    for ds in datasets:
+        if ds.get("file_storage_id") or ds.get("file_path"):
+            valid_datasets.append(ds)
+
+    if not valid_datasets:
+        return {
+            "messages": [
+                AIMessage(content="❌ **数据集无效**\n\n上传的文件可能已损坏或丢失。请重新上传数据文件。")
+            ],
+            "error": "数据集无有效存储信息",
         }
 
     # 构建系统提示词
@@ -175,10 +191,11 @@ def code_generator_node(state: AnalysisState) -> dict[str, Any]:
 
         logger.info(f"LLM 生成代码: {len(generated_code)} 字符")
 
-        # 在沙箱中执行
+        # 在沙箱中执行（传递 session_id 以从数据库获取文件）
         result = execute_code(
             code=generated_code,
-            datasets=datasets,
+            datasets=valid_datasets,
+            session_id=session_id,
         )
 
         # 构建用户可见的回复

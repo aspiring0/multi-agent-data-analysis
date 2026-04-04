@@ -67,6 +67,7 @@ async def websocket_chat(websocket: WebSocket, session_id: str):
 
                 # 构建状态
                 state = {
+                    "session_id": session_id,  # 传递 session_id 用于数据获取
                     "messages": [HumanMessage(content=user_message)],
                     "datasets": store.get_datasets(session_id),
                     "active_dataset_index": 0,
