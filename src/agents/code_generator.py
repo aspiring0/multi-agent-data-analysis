@@ -80,6 +80,17 @@ def _build_dataset_info(state: AnalysisState) -> str:
             f"- 预览:\n```\n{ds.get('preview', '无预览')}\n```"
         )
 
+    # 添加表间关系信息
+    session_id = state.get("session_id", "")
+    if session_id and len(datasets) > 1:
+        try:
+            from src.storage.relationship_discovery import get_relationship_discovery
+            discovery = get_relationship_discovery()
+            relations_info = discovery.format_relations_for_prompt(session_id)
+            parts.append(f"\n{relations_info}")
+        except Exception as e:
+            logger.debug(f"获取关系信息失败: {e}")
+
     return "\n\n".join(parts)
 
 
