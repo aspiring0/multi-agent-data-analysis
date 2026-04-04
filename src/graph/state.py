@@ -30,6 +30,18 @@ class DatasetMeta(TypedDict, total=False):
 
 
 # ============================================================
+# 任务调度
+# ============================================================
+class TaskItem(TypedDict, total=False):
+    """单个任务项"""
+    id: str                  # 任务 ID
+    agent: str               # 目标 Agent 名称
+    description: str         # 任务描述
+    status: str              # pending / running / completed / failed
+    result_summary: str      # 执行结果摘要
+
+
+# ============================================================
 # 代码执行结果
 # ============================================================
 class CodeResult(TypedDict, total=False):
@@ -78,6 +90,12 @@ class AnalysisState(TypedDict, total=False):
         "chat",              # 普通对话
     ]
     next_agent: str          # 下一个要执行的 Agent 名称
+
+    # ---- 任务调度（多Agent协作）----
+    task_queue: list[TaskItem]      # 待执行任务队列
+    current_task: TaskItem          # 当前执行的任务
+    completed_tasks: list[TaskItem] # 已完成的任务列表
+    scheduling_complete: bool       # 是否调度完成
 
     # ---- 数据层 ----
     datasets: list[DatasetMeta]     # 所有已加载的数据集

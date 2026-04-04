@@ -226,3 +226,156 @@ def get_graph(force_rebuild: bool = False, **kwargs) -> "CompiledStateGraph":
     if _graph_instance is None or force_rebuild:
         _graph_instance = build_analysis_graph(**kwargs)
     return _graph_instance
+
+
+# ============================================================
+# V2: 多轮调度工作流图
+# ============================================================
+
+def build_analysis_graph_v2(
+    with_checkpointer: bool = True,
+    debug: bool = False,
+) -> "CompiledStateGraph":
+    """
+    构建多轮调度数据分析工作流图 (V2)
+
+    与 V1 的区别：
+    - Coordinator 作为统一调度中心
+    - Agent 执行后返回 Coordinator（而不是 END）
+    - Coordinator 根据任务队列决定下一步
+
+    Graph 结构：
+
+        START → coordinator_v2
+                    │
+         ┌──────────┼──────────┬──────────┬──────────┐
+         │          │          │          │          │
+         ▼          ▼          ▼          ▼          ▼
+     data_profiler code_gen  visualizer  report    chat
+         │          │          │          │          │
+         └────┬─────┴────┬─────┴────┬─────┘          │
+              │          │          │                │
+              ▼          ▼          ▼                ▼
+              └──────────┴──────────┴────────────────┘
+                              │
+                         coordinator_v2
+                              │
+                         ┌────┴────┐
+                    队列为空?    队列不为空
+                         │           │
+                        END      继续执行
+    """
+    from langgraph.graph import StateGraph, END
+    from src.graph.state import AnalysisState
+    from src.agents.coordinator_v2 import coordinator_v2_node, route_by_agent_v2
+
+    # 创建 StateGraph
+    graph = StateGraph(AnalysisState)
+
+    # ============================================================
+    # 1. 注册所有 Node
+    # ============================================================
+
+    # 调度中心（入口）
+    graph.add_node("coordinator_v2", coordinator_v2_node)
+
+    # 专业 Agent
+    graph.add_node("data_profiler", data_profiler_node)
+    graph.add_node("code_generator", code_generator_node)
+    graph.add_node("visualizer", visualizer_node)
+    graph.add_node("report_writer", report_writer_node)
+    graph.add_node("chat", chat_node)
+    graph.add_node("debugger", debugger_node)
+
+    # ============================================================
+    # 2. 定义边
+    # ============================================================
+
+    # START → coordinator_v2
+    graph.set_entry_point("coordinator_v2")
+
+    # coordinator_v2 → 条件路由到各个 Agent
+    graph.add_conditional_edges(
+        "coordinator_v2",
+        route_by_agent_v2,
+        {
+            "data_profiler": "data_profiler",
+            "code_generator": "code_generator",
+            "visualizer": "visualizer",
+            "report_writer": "report_writer",
+            "chat": "chat",
+            END: END,
+        },
+    )
+
+    # 所有 Agent 执行后返回 coordinator_v2（支持多轮调度）
+    # 但如果有错误需要修复，先去 debugger
+
+    # code_generator 失败时去 debugger，成功时返回 coordinator
+    graph.add_conditional_edges(
+        "code_generator",
+        should_retry,
+        {
+            "retry": "debugger",
+            "done": "coordinator_v2",
+        },
+    )
+
+    # visualizer 同样
+    graph.add_conditional_edges(
+        "visualizer",
+        should_retry,
+        {
+            "retry": "debugger",
+            "done": "coordinator_v2",
+        },
+    )
+
+    # data_profiler 同样
+    graph.add_conditional_edges(
+        "data_profiler",
+        should_retry,
+        {
+            "retry": "debugger",
+            "done": "coordinator_v2",
+        },
+    )
+
+    # debugger 修复后返回 coordinator
+    graph.add_conditional_edges(
+        "debugger",
+        should_retry,
+        {
+            "retry": "debugger",
+            "done": "coordinator_v2",
+        },
+    )
+
+    # report_writer 和 chat 直接返回 coordinator
+    graph.add_edge("report_writer", "coordinator_v2")
+    graph.add_edge("chat", "coordinator_v2")
+
+    # ============================================================
+    # 3. 编译
+    # ============================================================
+    compile_kwargs = {"debug": debug}
+
+    if with_checkpointer:
+        compile_kwargs["checkpointer"] = _get_checkpointer()
+
+    compiled = graph.compile(**compile_kwargs)
+    logger.info("数据分析工作流图 V2 编译完成（多轮调度支持）")
+
+    return compiled
+
+
+# V2 实例缓存
+_graph_v2_instance = None
+
+
+def get_graph_v2(force_rebuild: bool = False, **kwargs) -> "CompiledStateGraph":
+    """获取或构建全局 Graph V2 实例（多轮调度）"""
+    global _graph_v2_instance
+    if _graph_v2_instance is None or force_rebuild:
+        _graph_v2_instance = build_analysis_graph_v2(**kwargs)
+    return _graph_v2_instance
