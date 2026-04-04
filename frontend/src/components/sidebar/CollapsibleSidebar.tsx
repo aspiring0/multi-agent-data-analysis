@@ -258,17 +258,21 @@ function FileUploader({ collapsed }: { collapsed: boolean }) {
 export function CollapsibleSidebar() {
   const [collapsed, setCollapsed] = useState(true)
   const createSession = useAppStore((s) => s.createSession)
+  const [error, setError] = useState<string | null>(null)
 
   const handleNewSession = useCallback(async () => {
-    const id = Date.now().toString(36)
     try {
       const res = await api.createSession('新对话')
       if (res.ok && res.data?.id) {
         createSession(res.data.id, res.data.name)
-        return
+      } else {
+        setError('创建会话失败: ' + (res.error || '未知错误'))
+        setTimeout(() => setError(null), 3000)
       }
-    } catch {}
-    createSession(id, '新对话')
+    } catch (err) {
+      setError('创建会话失败，请检查后端服务是否运行')
+      setTimeout(() => setError(null), 3000)
+    }
   }, [createSession])
 
   return (
@@ -313,6 +317,13 @@ export function CollapsibleSidebar() {
           </button>
         </div>
       </div>
+
+      {/* Error display */}
+      {error && !collapsed && (
+        <div className="mx-3 mb-2 p-2 bg-red-500/10 border border-red-500/20 rounded-lg">
+          <p className="text-xs text-red-500 text-center">{error}</p>
+        </div>
+      )}
 
       <div className={cn('h-px bg-white/10 dark:bg-white/5', collapsed && 'mx-2')} />
 
