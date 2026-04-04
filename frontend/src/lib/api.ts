@@ -59,6 +59,18 @@ export async function deleteSession(sessionId: string): Promise<ApiResponse<Json
   return { ok: true, data }
 }
 
+export async function updateSessionName(sessionId: string, name: string): Promise<ApiResponse<JsonData>> {
+  const res = await fetch(`${API_BASE}/api/sessions/${sessionId}/name?name=${encodeURIComponent(name)}`, {
+    method: 'PATCH',
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    return { ok: false, data: null, error: err.detail }
+  }
+  const data = await res.json()
+  return { ok: true, data }
+}
+
 // ---- Chat API ----
 
 export async function sendChat(

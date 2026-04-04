@@ -19,16 +19,33 @@ export interface DatasetMeta {
   preview: string[][]
 }
 
+export interface CodeArtifact {
+  id: string
+  name: string
+  code: string
+  timestamp: number
+}
+
+export interface FigureArtifact {
+  id: string
+  path: string
+  name: string
+  timestamp: number
+}
+
 export interface Session {
   id: string
   name: string
   messages: Message[]
   datasets: DatasetMeta[]
-  currentCode: string
-  report: string
-  figures: string[]
+  codeArtifacts: CodeArtifact[]
+  reports: string[]
+  figures: FigureArtifact[]
   createdAt: string
   updatedAt: string
+  // 保留旧字段用于兼容
+  currentCode?: string
+  report?: string
 }
 
 export interface AppStore {
@@ -57,7 +74,12 @@ export interface AppStore {
   // Dataset actions
   addDataset: (sessionId: string, dataset: DatasetMeta) => void
 
-  // Artifact actions
+  // Artifact actions (新)
+  addCodeArtifact: (sessionId: string, code: string, name?: string) => void
+  addReport: (sessionId: string, report: string) => void
+  addFigures: (sessionId: string, figures: string[]) => void
+
+  // 旧方法 (保留兼容)
   setCode: (sessionId: string, code: string) => void
   setReport: (sessionId: string, report: string) => void
   setFigures: (sessionId: string, figures: string[]) => void
@@ -110,8 +132,8 @@ export const useAppStore = create<AppStore>()(
               name,
               messages: [],
               datasets: [],
-              currentCode: '',
-              report: '',
+              codeArtifacts: [],
+              reports: [],
               figures: [],
               createdAt: new Date().toISOString(),
               updatedAt: new Date().toISOString(),
@@ -195,16 +217,88 @@ export const useAppStore = create<AppStore>()(
           }
         }),
 
-      // ---- Artifact actions ----
+      // ---- Artifact actions (新) ----
 
-      setCode: (sessionId, code) =>
+      addCodeArtifact: (sessionId, code, name) =>
+        set((state) => {
+          const session = state.sessions[sessionId]
+          if (!session) return state
+          const artifact: CodeArtifact = {
+            id: Date.now().toString(36),
+            name: name || `分析代码 #${session.codeArtifacts.length + 1}`,
+            code,
+            timestamp: Date.now(),
+          }
+          return {
+            sessions: {
+              ...state.sessions,
+              [sessionId]: {
+                ...session,
+                codeArtifacts: [...session.codeArtifacts, artifact],
+                updatedAt: new Date().toISOString(),
+              },
+            },
+          }
+        }),
+
+      addReport: (sessionId, report) =>
         set((state) => {
           const session = state.sessions[sessionId]
           if (!session) return state
           return {
             sessions: {
               ...state.sessions,
-              [sessionId]: { ...session, currentCode: code },
+              [sessionId]: {
+                ...session,
+                reports: [...session.reports, report],
+                updatedAt: new Date().toISOString(),
+              },
+            },
+          }
+        }),
+
+      addFigures: (sessionId, figures) =>
+        set((state) => {
+          const session = state.sessions[sessionId]
+          if (!session) return state
+          const newFigures: FigureArtifact[] = figures.map((path, i) => ({
+            id: `${Date.now()}-${i}`,
+            path,
+            name: `图表 #${session.figures.length + i + 1}`,
+            timestamp: Date.now(),
+          }))
+          return {
+            sessions: {
+              ...state.sessions,
+              [sessionId]: {
+                ...session,
+                figures: [...session.figures, ...newFigures],
+                updatedAt: new Date().toISOString(),
+              },
+            },
+          }
+        }),
+
+      // ---- 旧方法 (兼容) ----
+
+      setCode: (sessionId, code) =>
+        set((state) => {
+          const session = state.sessions[sessionId]
+          if (!session) return state
+          const artifact: CodeArtifact = {
+            id: Date.now().toString(36),
+            name: `分析代码 #${(session.codeArtifacts?.length || 0) + 1}`,
+            code,
+            timestamp: Date.now(),
+          }
+          return {
+            sessions: {
+              ...state.sessions,
+              [sessionId]: {
+                ...session,
+                codeArtifacts: [...(session.codeArtifacts || []), artifact],
+                currentCode: code,
+              },
             },
           }
         }),
@@ -216,7 +310,11 @@ export const useAppStore = create<AppStore>()(
           return {
             sessions: {
               ...state.sessions,
-              [sessionId]: { ...session, report },
+              [sessionId]: {
+                ...session,
+                reports: [...(session.reports || []), report],
+                report,
+              },
             },
           }
         }),
@@ -225,10 +323,19 @@ export const useAppStore = create<AppStore>()(
         set((state) => {
           const session = state.sessions[sessionId]
           if (!session) return state
+          const newFigures: FigureArtifact[] = figures.map((path, i) => ({
+            id: `${Date.now()}-${i}`,
+            path,
+            name: `图表 #${(session.figures?.length || 0) + i + 1}`,
+            timestamp: Date.now(),
+          }))
           return {
             sessions: {
               ...state.sessions,
-              [sessionId]: { ...session, figures },
+              [sessionId]: {
+                ...session,
+                figures: [...(session.figures || []), ...newFigures],
+              },
             },
           }
         }),

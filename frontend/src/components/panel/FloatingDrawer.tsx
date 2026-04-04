@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { useAppStore } from '@/lib/store'
+import { useAppStore, type CodeArtifact, type FigureArtifact } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -18,20 +18,34 @@ interface Position {
 function CodePreview() {
   const currentSessionId = useAppStore((s) => s.currentSessionId)
   const sessions = useAppStore((s) => s.sessions)
-  const code = currentSessionId ? sessions[currentSessionId]?.currentCode : ''
+  const session = currentSessionId ? sessions[currentSessionId] : null
+  const codeArtifacts = session?.codeArtifacts || []
+  const [selectedId, setSelectedId] = useState<string | null>(null)
 
-  const handleDownload = () => {
-    if (!code) return
-    const blob = new Blob([code], { type: 'text/plain;charset=utf-8' })
+  const selectedCode = codeArtifacts.find(c => c.id === selectedId) || codeArtifacts[codeArtifacts.length - 1]
+
+  const handleDownload = (artifact: CodeArtifact) => {
+    const blob = new Blob([artifact.code], { type: 'text/plain;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = '数据分析.py'
+    a.download = `${artifact.name}.py`
     a.click()
     URL.revokeObjectURL(url)
   }
 
-  if (!code) {
+  const handleDownloadAll = () => {
+    const allCode = codeArtifacts.map(a => `# ${a.name}\n\n${a.code}`).join('\n\n---\n\n')
+    const blob = new Blob([allCode], { type: 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = '所有分析代码.py'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  if (codeArtifacts.length === 0) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-muted-foreground p-4">
         执行分析后，代码将在此显示
@@ -41,23 +55,54 @@ function CodePreview() {
 
   return (
     <div className="flex h-full flex-col">
+      {/* 代码列表 */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-white/10">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium">数据分析.py</span>
-          <span className="text-xs text-muted-foreground">{code.length} 字符</span>
+        <div className="flex gap-1 overflow-x-auto">
+          {codeArtifacts.map((artifact) => (
+            <button
+              key={artifact.id}
+              onClick={() => setSelectedId(artifact.id)}
+              className={cn(
+                'px-2 py-1 text-xs rounded-md whitespace-nowrap transition-all',
+                (selectedId === artifact.id || (!selectedId && artifact === selectedCode))
+                  ? 'bg-purple-500/30 text-purple-700 dark:text-purple-300'
+                  : 'bg-white/20 hover:bg-white/30'
+              )}
+            >
+              {artifact.name}
+            </button>
+          ))}
         </div>
-        <Button variant="ghost" size="sm" onClick={handleDownload}>下载</Button>
+        <Button variant="ghost" size="sm" onClick={handleDownloadAll}>下载全部</Button>
       </div>
-      <ScrollArea className="flex-1">
-        <SyntaxHighlighter
-          language="python"
-          style={oneDark}
-          customStyle={{ margin: 0, fontSize: '0.75rem', background: 'transparent' }}
-          showLineNumbers
-        >
-          {code}
-        </SyntaxHighlighter>
-      </ScrollArea>
+
+      {/* 代码预览 - 修复滚动问题 */}
+      <div className="flex-1 overflow-auto">
+        {selectedCode && (
+          <div className="relative">
+            <div className="absolute right-2 top-2 z-10">
+              <Button variant="ghost" size="sm" onClick={() => handleDownload(selectedCode)}>
+                下载
+              </Button>
+            </div>
+            <SyntaxHighlighter
+              language="python"
+              style={oneDark}
+              customStyle={{
+                margin: 0,
+                fontSize: '0.75rem',
+                background: 'transparent',
+                minHeight: '100%',
+              }}
+              showLineNumbers
+              wrapLines={true}
+              wrapLongLines={true}
+            >
+              {selectedCode.code}
+            </SyntaxHighlighter>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -65,10 +110,18 @@ function CodePreview() {
 function ChartGallery() {
   const currentSessionId = useAppStore((s) => s.currentSessionId)
   const sessions = useAppStore((s) => s.sessions)
-  const figures = currentSessionId ? sessions[currentSessionId]?.figures : []
+  const session = currentSessionId ? sessions[currentSessionId] : null
+  const figures = session?.figures || []
   const [selected, setSelected] = useState<string | null>(null)
 
-  if (!figures || figures.length === 0) {
+  const handleDownload = (fig: FigureArtifact) => {
+    const a = document.createElement('a')
+    a.href = `http://localhost:8000${fig.path}`
+    a.download = fig.name
+    a.click()
+  }
+
+  if (figures.length === 0) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-muted-foreground p-4">
         图表将在此显示
@@ -76,28 +129,52 @@ function ChartGallery() {
     )
   }
 
+  const selectedFig = figures.find(f => f.id === selected) || figures[0]
+
   return (
     <div className="flex h-full flex-col">
-      <ScrollArea className="flex-1 p-2">
+      {/* 图表列表 */}
+      <div className="flex items-center gap-1 px-3 py-2 border-b border-white/10 overflow-x-auto">
+        {figures.map((fig) => (
+          <button
+            key={fig.id}
+            onClick={() => setSelected(fig.id)}
+            className={cn(
+              'px-2 py-1 text-xs rounded-md whitespace-nowrap transition-all',
+              (selected === fig.id || (!selected && fig === figures[0]))
+                ? 'bg-purple-500/30 text-purple-700 dark:text-purple-300'
+                : 'bg-white/20 hover:bg-white/30'
+            )}
+          >
+            {fig.name}
+          </button>
+        ))}
+      </div>
+
+      {/* 图片预览 */}
+      <div className="flex-1 overflow-auto p-2">
         <div className="grid grid-cols-2 gap-2">
-          {figures.map((fig: string, i: number) => (
+          {figures.map((fig) => (
             <button
-              key={i}
-              onClick={() => setSelected(selected === fig ? null : fig)}
+              key={fig.id}
+              onClick={() => handleDownload(fig)}
               className={cn(
-                'aspect-square rounded-lg overflow-hidden border-2 transition-all',
-                selected === fig ? 'border-purple-500' : 'border-transparent hover:border-white/30'
+                'aspect-square rounded-lg overflow-hidden border-2 transition-all relative group',
+                selected === fig.id ? 'border-purple-500' : 'border-transparent hover:border-white/30'
               )}
             >
               <img
-                src={`http://localhost:8000${fig}`}
-                alt={`Chart ${i + 1}`}
+                src={`http://localhost:8000${fig.path}`}
+                alt={fig.name}
                 className="w-full h-full object-cover"
               />
+              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                <span className="text-white text-xs">点击下载</span>
+              </div>
             </button>
           ))}
         </div>
-      </ScrollArea>
+      </div>
     </div>
   )
 }
@@ -105,9 +182,13 @@ function ChartGallery() {
 function ReportView() {
   const currentSessionId = useAppStore((s) => s.currentSessionId)
   const sessions = useAppStore((s) => s.sessions)
-  const report = currentSessionId ? sessions[currentSessionId]?.report : ''
+  const session = currentSessionId ? sessions[currentSessionId] : null
+  const reports = session?.reports || []
+  const [selectedIdx, setSelectedIdx] = useState(0)
 
-  if (!report) {
+  const latestReport = reports[reports.length - 1] || session?.report
+
+  if (!latestReport) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-muted-foreground p-4">
         分析完成后，报告将在此显示
@@ -116,13 +197,33 @@ function ReportView() {
   }
 
   return (
-    <ScrollArea className="flex-1 p-4">
-      <div className="prose prose-sm dark:prose-invert max-w-none">
-        <ReactMarkdown>
-          {report}
-        </ReactMarkdown>
-      </div>
-    </ScrollArea>
+    <div className="flex h-full flex-col">
+      {reports.length > 1 && (
+        <div className="flex items-center gap-1 px-3 py-2 border-b border-white/10 overflow-x-auto">
+          {reports.map((_, idx) => (
+            <button
+              key={idx}
+              onClick={() => setSelectedIdx(idx)}
+              className={cn(
+                'px-2 py-1 text-xs rounded-md whitespace-nowrap transition-all',
+                selectedIdx === idx
+                  ? 'bg-purple-500/30 text-purple-700 dark:text-purple-300'
+                  : 'bg-white/20 hover:bg-white/30'
+              )}
+            >
+              报告 #{idx + 1}
+            </button>
+          ))}
+        </div>
+      )}
+      <ScrollArea className="flex-1 p-4">
+        <div className="prose prose-sm dark:prose-invert max-w-none">
+          <ReactMarkdown>
+            {reports[selectedIdx] || latestReport}
+          </ReactMarkdown>
+        </div>
+      </ScrollArea>
+    </div>
   )
 }
 
@@ -175,8 +276,8 @@ export function FloatingDrawer() {
       style={{
         right: position.x,
         top: position.y,
-        width: expanded ? 360 : 200,
-        height: expanded ? 480 : 48,
+        width: expanded ? 400 : 200,
+        height: expanded ? 520 : 48,
       }}
     >
       {/* Drag header */}
@@ -204,13 +305,13 @@ export function FloatingDrawer() {
             <TabsTrigger value="charts" className="text-xs">图表</TabsTrigger>
             <TabsTrigger value="report" className="text-xs">报告</TabsTrigger>
           </TabsList>
-          <TabsContent value="code" className="flex-1 overflow-hidden m-0">
+          <TabsContent value="code" className="flex-1 overflow-hidden m-0 data-[state=active]:flex flex-col">
             <CodePreview />
           </TabsContent>
-          <TabsContent value="charts" className="flex-1 overflow-hidden m-0">
+          <TabsContent value="charts" className="flex-1 overflow-hidden m-0 data-[state=active]:flex flex-col">
             <ChartGallery />
           </TabsContent>
-          <TabsContent value="report" className="flex-1 overflow-hidden m-0">
+          <TabsContent value="report" className="flex-1 overflow-hidden m-0 data-[state=active]:flex flex-col">
             <ReportView />
           </TabsContent>
         </Tabs>

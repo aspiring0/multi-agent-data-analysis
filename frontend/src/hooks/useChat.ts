@@ -10,6 +10,7 @@ export function useChat() {
   const [isConnected, setIsConnected] = useState(false)
 
   const currentSessionId = useAppStore((s) => s.currentSessionId)
+  const sessions = useAppStore((s) => s.sessions)
   const isStreaming = useAppStore((s) => s.isStreaming)
   const addMessage = useAppStore((s) => s.addMessage)
   const setStreamingContent = useAppStore((s) => s.setStreamingContent)
@@ -20,6 +21,16 @@ export function useChat() {
   const setFigures = useAppStore((s) => s.setFigures)
   const addExecutionLog = useAppStore((s) => s.addExecutionLog)
   const clearExecutionLog = useAppStore((s) => s.clearExecutionLog)
+  const updateSessionName = useAppStore((s) => s.updateSessionName)
+
+  // 生成标题：从第一条消息提取
+  const generateTitle = (message: string): string => {
+    // 移除多余空格和换行
+    const cleaned = message.trim().replace(/\s+/g, ' ')
+    // 截取前20个字符
+    const title = cleaned.length > 20 ? cleaned.slice(0, 20) + '...' : cleaned
+    return title || '新对话'
+  }
 
   // 建立 WebSocket 连接
   const connect = useCallback(
@@ -123,6 +134,15 @@ export function useChat() {
         timestamp: Date.now(),
       })
 
+      // 检查是否是第一条消息，自动生成标题
+      const session = sessions[currentSessionId]
+      if (session && session.messages.length === 0 && session.name === '新对话') {
+        const newTitle = generateTitle(content)
+        updateSessionName(currentSessionId, newTitle)
+        // 同步到后端
+        api.updateSessionName(currentSessionId, newTitle).catch(() => {})
+      }
+
       // 优先用 WebSocket
       if (wsRef.current?.connected) {
         wsRef.current.send(content)
@@ -155,11 +175,13 @@ export function useChat() {
     },
     [
       currentSessionId,
+      sessions,
       addMessage,
       setStreaming,
       setStreamingContent,
       setCode,
       setReport,
+      updateSessionName,
     ],
   )
 
