@@ -4,11 +4,12 @@
 
 | 分类 | 说明 | 文档 |
 |-----|------|------|
+| **架构 V2** | Two-Layer (Skills + MCP) | [查看 →](ARCHITECTURE_V2.md) |
+| **迁移指南** | V1 → V2 迁移 | [查看 →](MIGRATION_GUIDE.md) |
+| **NL 分析** | 自然语言驱动分析 | [查看 →](NL_DRIVEN_ANALYSIS.md) |
 | **API 参考** | REST API + WebSocket | [查看 →](api/REFERENCE.md) |
 | **架构设计** | 系统架构和技术选型 | [查看 →](architecture/) |
 | **部署指南** | 部署和配置 | [查看 →](deployment/) |
-| **开发指南** | 开发和调试 | [查看 →](development/) |
-| **技能系统** | 技能开发和配置 | [查看 →](skills/) |
 
 ---
 
@@ -48,6 +49,59 @@ cd frontend && npm run dev
 2. 点击 **"+"** 创建新会话
 3. 上传数据文件 (CSV/Excel/JSON)
 4. 输入分析需求，AI 自动分析
+
+---
+
+## 架构 V2 (2026-04 更新)
+
+### Two-Layer Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                     │
+│   ┌─────────────┐    ┌─────────────┐    ┌─────────────┐         │
+│   │  AGENT.md   │    │  SKILL.md   │    │ MCP Server  │         │
+│   │ (Knowledge) │    │ (Knowledge) │    │ (Execution) │         │
+│   └──────┬──────┘    └──────┬──────┘    └──────┬──────┘         │
+│          │                  │                  │                       │
+│          └──────────────────┼──────────────────┘                       │
+│                             │                                          │
+│                     ┌───────▼───────┐                                  │
+│                     │  MCP Client   │                                  │
+│                     │ (Local/HTTP)  │                                  │
+│                     └───────────────┘                                  │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 组件状态
+
+| 组件 | V1 (Legacy) | V2 (New) | 说明 |
+|------|-------------|----------|------|
+| Agents | ✅ Active | ✅ Ready | V2 从 AGENT.md 加载 |
+| Skills | ✅ Active | ✅ Active | 动态发现已实现 |
+| MCP Servers | N/A | ✅ Active | mcp-data, mcp-chart |
+| Skill Selector | N/A | ✅ Active | 意图 → Skill 映射 |
+
+### 目录结构
+
+```
+├── agents/                    # Agent 定义 (V2)
+│   ├── AGENTS.md             # 注册表
+│   └── */AGENT.md            # 各 Agent 定义
+│
+├── skills/builtin/           # Skill 定义
+│   └── */SKILL.md + generate.py
+│
+├── mcp_servers/              # MCP 服务器
+│   ├── mcp_data/             # 数据处理
+│   └── mcp_chart/            # 图表生成
+│
+└── src/
+    ├── agents/               # Agent 实现 (V1 + V2)
+    ├── skills/               # Skill 注册表
+    └── mcp/                  # MCP 客户端
+```
 
 ---
 
