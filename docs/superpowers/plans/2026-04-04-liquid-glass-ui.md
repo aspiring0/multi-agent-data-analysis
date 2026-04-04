@@ -1,5 +1,7 @@
 # Liquid Glass UI 重构实施计划
 
+> **状态: ✅ 已完成 (v1: 2026-04-04, v2: 2026-04-05)**
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 将多Agent数据分析平台的UI从传统三栏布局升级为2026年液态玻璃风格，包含可折叠边栏、浮动抽屉和Agent状态卡片组。
@@ -967,7 +969,60 @@ git commit -m "feat(ui): complete Liquid Glass UI redesign
 ## 验收标准
 
 1. **视觉**: 玻璃效果清晰可见，渐变背景美观
-2. **交互**: 边栏hover展开流畅，抽屉可拖拽
+2. **交互**: 边栏点击展开流畅，抽屉可拖拽
 3. **Agent可视化**: 状态卡片正确显示活跃Agent
 4. **响应式**: 在不同屏幕尺寸下布局正常
 5. **暗色模式**: 所有组件在暗色模式下表现正常
+
+---
+
+## v2 交互改进 (2026-04-05)
+
+基于用户反馈的改进：
+
+### 已完成改进
+
+1. **侧边栏交互** ✅
+   - 从悬停展开改为点击展开/收缩
+   - 添加展开/收缩按钮 (箭头图标)
+   - 折叠状态下也能新建对话
+
+2. **对话标题管理** ✅
+   - 自动生成标题: 从第一条消息提取前20字符
+   - 支持重命名: 双击会话项或点击编辑图标
+   - API: `PATCH /api/sessions/{id}/name`
+
+3. **浮动面板重构** ✅
+   - 代码预览支持滚动 (`overflow-auto`)
+   - 支持多个代码块 (保留历史分析代码)
+   - Tab 切换不同代码块
+   - "下载全部" 按钮
+   - 图表画廊: 点击下载，悬停预览
+   - 报告: 支持多份报告历史
+
+4. **Store 数据结构** ✅
+   ```typescript
+   interface Session {
+     codeArtifacts: CodeArtifact[]  // 多个代码产物
+     figures: FigureArtifact[]      // 多个图表
+     reports: string[]              // 多个报告
+   }
+   ```
+
+### 文件变更
+
+| 文件 | 变更 |
+|------|------|
+| `CollapsibleSidebar.tsx` | 点击展开 + 重命名 |
+| `FloatingDrawer.tsx` | 多产物列表 + 滚动 |
+| `store.ts` | CodeArtifact/FigureArtifact 类型 |
+| `api.ts` | updateSessionName API |
+| `useChat.ts` | 自动生成标题 |
+
+### 提交记录
+
+```
+d62f8c8 feat(ui): 完善 UI 交互体验
+a2b874a refactor(ui): integrate Liquid Glass components into main layout
+ab86a09 feat(ui): complete Liquid Glass UI redesign
+```
