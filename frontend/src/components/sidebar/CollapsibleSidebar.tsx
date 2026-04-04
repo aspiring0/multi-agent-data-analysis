@@ -158,16 +158,26 @@ function FileUploader({ collapsed }: { collapsed: boolean }) {
   const currentSessionId = useAppStore((s) => s.currentSessionId)
   const addDataset = useAppStore((s) => s.addDataset)
   const [uploading, setUploading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const handleUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file || !currentSessionId) return
+
     setUploading(true)
+    setError(null)
+
     try {
       const res = await api.uploadFile(currentSessionId, file)
       if (res.ok && res.data) {
         addDataset(currentSessionId, res.data as DatasetMeta)
+      } else {
+        setError(res.error || '上传失败')
+        setTimeout(() => setError(null), 3000)
       }
+    } catch (err) {
+      setError('上传失败，请检查网络连接')
+      setTimeout(() => setError(null), 3000)
     } finally {
       setUploading(false)
       e.target.value = ''
@@ -201,6 +211,9 @@ function FileUploader({ collapsed }: { collapsed: boolean }) {
       >
         {uploading ? '上传中...' : '上传数据文件'}
       </Button>
+      {error && (
+        <p className="mt-2 text-xs text-red-500 text-center">{error}</p>
+      )}
     </div>
   )
 }
