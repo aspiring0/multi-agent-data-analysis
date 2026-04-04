@@ -98,7 +98,7 @@ export async function uploadFile(
 ): Promise<ApiResponse<JsonData>> {
   const formData = new FormData()
   formData.append('file', file)
-  const res = await fetch(`${API_BASE}/api/upload/${sessionId}/`, {
+  const res = await fetch(`${API_BASE}/api/upload/${sessionId}`, {
     method: 'POST',
     body: formData,
   })
