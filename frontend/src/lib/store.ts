@@ -94,6 +94,10 @@ export const useAppStore = create<AppStore>()(
       isStreaming: false,
       wsConnected: false,
       executionLog: [],
+      currentAgent: null,
+      currentAgentDisplay: null,
+      currentSkill: null,
+      currentSkillDisplay: null,
 
       // ---- Session actions ----
 
@@ -233,6 +237,13 @@ export const useAppStore = create<AppStore>()(
 
       setStreaming: (streaming) => set({ isStreaming: streaming }),
       setWsConnected: (connected) => set({ wsConnected: connected }),
+
+      // ---- Agent Execution Tracking ----
+
+      setCurrentAgent: (agent, display) =>
+        set({ currentAgent: agent, currentAgentDisplay: display }),
+      setCurrentSkill: (skill, display) =>
+        set({ currentSkill: skill, currentSkillDisplay: display }),
 
       // ---- Execution Log ----
 

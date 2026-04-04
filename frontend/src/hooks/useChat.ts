@@ -62,7 +62,7 @@ export function useChat() {
             })
             break
           case 'chunk':
-            if (data.content) {
+            if (data.content && typeof data.content === 'string') {
               setStreamingContent(sessionId, data.content)
               addExecutionLog({
                 timestamp: Date.now(),
@@ -73,12 +73,12 @@ export function useChat() {
             }
             break
           case 'code':
-            if (data.content) {
+            if (data.content && typeof data.content === 'string') {
               setCode(sessionId, data.content)
             }
             break
           case 'report':
-            if (data.content) {
+            if (data.content && typeof data.content === 'string') {
               setReport(sessionId, data.content)
             }
             break

@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { cn } from '@/lib/utils'
-import { ExecutionPanel } from './ExecutionPanel'
+import { AgentStatusCards } from '@/components/agents/AgentStatusCards'
 
 // ---- Code Block with Syntax Highlighting ----
 
@@ -298,8 +298,8 @@ export function ChatInterface() {
         </span>
       </div>
 
-      {/* Execution Process Panel */}
-      <ExecutionPanel />
+      {/* Agent Status Cards */}
+      <AgentStatusCards className="border-b border-white/10 dark:border-white/5 bg-gradient-to-r from-purple-500/5 to-transparent" />
 
       {/* Messages */}
       <ScrollArea className="flex-1 h-0">

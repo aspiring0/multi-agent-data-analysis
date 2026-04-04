@@ -117,9 +117,11 @@ function ReportView() {
 
   return (
     <ScrollArea className="flex-1 p-4">
-      <ReactMarkdown className="prose prose-sm dark:prose-invert max-w-none">
-        {report}
-      </ReactMarkdown>
+      <div className="prose prose-sm dark:prose-invert max-w-none">
+        <ReactMarkdown>
+          {report}
+        </ReactMarkdown>
+      </div>
     </ScrollArea>
   )
 }

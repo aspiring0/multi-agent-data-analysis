@@ -11,8 +11,12 @@ const WS_BASE = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000'
 
 export type WsMessageHandler = (data: {
   type: string
-  content?: string
+  content?: string | string[]
   message?: string
+  agent?: string
+  agent_display?: string
+  skill?: string
+  skill_display?: string
 }) => void
 
 export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'reconnecting'
