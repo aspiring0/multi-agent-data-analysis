@@ -40,6 +40,11 @@ class Settings:
     # ---- 日志配置 ----
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
 
+    # ---- Graph 配置 ----
+    USE_GRAPH_V2: bool = os.getenv("USE_GRAPH_V2", "true").lower() in ("true", "1", "yes")
+    # V2: 多轮调度模式 (Coordinator V2)
+    # V1: 单次路由模式 (原始 Coordinator)
+
     def __init__(self):
         """初始化时确保必要目录存在"""
         self.UPLOAD_DIR.mkdir(parents=True, exist_ok=True)

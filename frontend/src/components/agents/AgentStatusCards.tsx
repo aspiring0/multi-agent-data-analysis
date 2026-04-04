@@ -5,12 +5,14 @@ import { useAppStore } from '@/lib/store'
 
 const AGENT_CONFIG = {
   coordinator: { icon: '🎯', name: 'Coordinator', color: 'bg-purple-500' },
+  coordinator_v2: { icon: '🎯', name: '调度中心', color: 'bg-violet-500' },
   data_parser: { icon: '📄', name: 'Parser', color: 'bg-blue-500' },
   data_profiler: { icon: '🔍', name: 'Profiler', color: 'bg-cyan-500' },
   code_generator: { icon: '💻', name: 'Code Gen', color: 'bg-amber-500' },
   debugger: { icon: '🔧', name: 'Debugger', color: 'bg-orange-500' },
   visualizer: { icon: '📊', name: 'Visualizer', color: 'bg-pink-500' },
   report_writer: { icon: '📝', name: 'Reporter', color: 'bg-indigo-500' },
+  chat: { icon: '💬', name: 'Chat', color: 'bg-green-500' },
 }
 
 type AgentName = keyof typeof AGENT_CONFIG
@@ -22,16 +24,26 @@ interface AgentStatusCardsProps {
 
 export function AgentStatusCards({ activeAgents = [], className }: AgentStatusCardsProps) {
   const isStreaming = useAppStore((s) => s.isStreaming)
+  const executionLog = useAppStore((s) => s.executionLog)
 
-  // Show coordinator when streaming but no active agents specified
-  const displayAgents: AgentName[] = isStreaming && activeAgents.length === 0
-    ? ['coordinator']
-    : activeAgents.length > 0
-      ? activeAgents
-      : []
+  // 从执行日志中提取活跃的 agent
+  const activeAgentsFromLog = executionLog
+    .filter((log) => log.type === 'agent')
+    .map((log) => log.agent)
+    .filter((agent): agent is AgentName => agent !== undefined && agent in AGENT_CONFIG)
 
-  // Don't render if not streaming and no active agents
-  if (!isStreaming && activeAgents.length === 0) {
+  // 去重并保留顺序
+  const uniqueActiveAgents = [...new Set(activeAgentsFromLog)]
+
+  // 显示的 agent 列表
+  const displayAgents: AgentName[] = isStreaming && uniqueActiveAgents.length === 0
+    ? ['coordinator_v2']
+    : uniqueActiveAgents.length > 0
+      ? uniqueActiveAgents
+      : activeAgents
+
+  // 不渲染条件
+  if (!isStreaming && activeAgents.length === 0 && executionLog.length === 0) {
     return null
   }
 
@@ -39,7 +51,10 @@ export function AgentStatusCards({ activeAgents = [], className }: AgentStatusCa
     <div className={cn('flex flex-wrap gap-2 px-4 py-2', className)}>
       {displayAgents.map((agent) => {
         const config = AGENT_CONFIG[agent]
-        const isActive = activeAgents.includes(agent) || (isStreaming && agent === 'coordinator')
+        if (!config) return null
+
+        const isActive = uniqueActiveAgents.includes(agent) ||
+          (isStreaming && (agent === 'coordinator_v2' || agent === 'coordinator'))
 
         return (
           <div
@@ -58,7 +73,7 @@ export function AgentStatusCards({ activeAgents = [], className }: AgentStatusCa
               className={cn(
                 'w-2 h-2 rounded-full',
                 isActive ? config.color : 'bg-gray-400',
-                isActive && 'animate-pulse-glow'
+                isActive && 'animate-pulse'
               )}
             />
           </div>

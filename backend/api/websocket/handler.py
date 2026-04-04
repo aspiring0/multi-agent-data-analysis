@@ -2,16 +2,21 @@
 WebSocket 处理器
 
 处理实时聊天通信和流式响应。
+支持 V1 (单次路由) 和 V2 (多轮调度) 两种模式。
 """
 import logging
 from pathlib import Path
 from fastapi import WebSocket, WebSocketDisconnect
 from langchain_core.messages import HumanMessage
 
-from src.graph.builder import get_graph
+from src.graph.builder import get_graph, get_graph_v2
 from src.persistence.session_store import SessionStore
+from configs.settings import settings
 
 logger = logging.getLogger(__name__)
+
+# 是否使用 V2 多轮调度模式
+USE_GRAPH_V2 = getattr(settings, 'USE_GRAPH_V2', True)
 
 
 async def websocket_chat(websocket: WebSocket, session_id: str):
@@ -62,8 +67,13 @@ async def websocket_chat(websocket: WebSocket, session_id: str):
 
                 store.add_message(session_id, "user", user_message)
 
-                # 获取 Graph
-                graph = get_graph(with_checkpointer=False)
+                # 获取 Graph（V2 支持多轮调度）
+                if USE_GRAPH_V2:
+                    graph = get_graph_v2(with_checkpointer=False)
+                    logger.debug("使用 V2 多轮调度 Graph")
+                else:
+                    graph = get_graph(with_checkpointer=False)
+                    logger.debug("使用 V1 单次路由 Graph")
 
                 # 构建状态
                 state = {
@@ -71,6 +81,10 @@ async def websocket_chat(websocket: WebSocket, session_id: str):
                     "messages": [HumanMessage(content=user_message)],
                     "datasets": store.get_datasets(session_id),
                     "active_dataset_index": 0,
+                    # V2 调度状态
+                    "task_queue": [],
+                    "completed_tasks": [],
+                    "scheduling_complete": False,
                 }
 
                 # 发送开始标记
@@ -88,6 +102,7 @@ async def websocket_chat(websocket: WebSocket, session_id: str):
                             # 发送 Agent 执行状态
                             agent_names = {
                                 "coordinator": "调度中心",
+                                "coordinator_v2": "调度中心 V2",
                                 "data_parser": "数据解析",
                                 "data_profiler": "数据探索",
                                 "code_generator": "代码生成",
@@ -97,6 +112,16 @@ async def websocket_chat(websocket: WebSocket, session_id: str):
                                 "chat": "对话"
                             }
                             agent_display = agent_names.get(node_name, node_name)
+
+                            # 发送任务队列状态（V2 模式）
+                            if "task_queue" in node_output or "completed_tasks" in node_output:
+                                task_queue = node_output.get("task_queue", [])
+                                completed = node_output.get("completed_tasks", [])
+                                await websocket.send_json({
+                                    "type": "task_status",
+                                    "pending": len(task_queue),
+                                    "completed": len(completed)
+                                })
 
                             await websocket.send_json({
                                 "type": "agent",

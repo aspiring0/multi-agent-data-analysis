@@ -98,6 +98,15 @@ export function useChat() {
               setFigures(sessionId, data.content)
             }
             break
+          case 'task_status':
+            // V2 多轮调度状态
+            addExecutionLog({
+              timestamp: Date.now(),
+              type: 'chunk',
+              content: `待执行: ${data.pending}, 已完成: ${data.completed}`,
+              agent: 'coordinator_v2',
+            })
+            break
           case 'done':
             setStreaming(false)
             break

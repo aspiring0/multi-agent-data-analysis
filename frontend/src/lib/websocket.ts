@@ -17,6 +17,8 @@ export type WsMessageHandler = (data: {
   agent_display?: string
   skill?: string
   skill_display?: string
+  pending?: number
+  completed?: number
 }) => void
 
 export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'reconnecting'
