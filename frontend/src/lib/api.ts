@@ -16,7 +16,7 @@ type JsonData = Record<string, any>
 // ---- Session API ----
 
 export async function createSession(name: string): Promise<ApiResponse<JsonData>> {
-  const res = await fetch(`${API_BASE}/api/sessions`, {
+  const res = await fetch(`${API_BASE}/api/sessions/`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name }),
@@ -30,7 +30,7 @@ export async function createSession(name: string): Promise<ApiResponse<JsonData>
 }
 
 export async function listSessions(): Promise<ApiResponse<JsonData[]>> {
-  const res = await fetch(`${API_BASE}/api/sessions`)
+  const res = await fetch(`${API_BASE}/api/sessions/`)
   if (!res.ok) {
     return { ok: false, data: null, error: res.statusText }
   }
