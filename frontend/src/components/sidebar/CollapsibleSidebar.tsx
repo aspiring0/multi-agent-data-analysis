@@ -162,7 +162,14 @@ function FileUploader({ collapsed }: { collapsed: boolean }) {
 
   const handleUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (!file || !currentSessionId) return
+    if (!file) return
+
+    if (!currentSessionId) {
+      setError('请先创建一个会话')
+      setTimeout(() => setError(null), 3000)
+      e.target.value = ''
+      return
+    }
 
     setUploading(true)
     setError(null)
@@ -184,17 +191,42 @@ function FileUploader({ collapsed }: { collapsed: boolean }) {
     }
   }, [currentSessionId, addDataset])
 
+  const handleButtonClick = useCallback(() => {
+    if (!currentSessionId) {
+      setError('请先创建一个会话')
+      setTimeout(() => setError(null), 3000)
+      return
+    }
+    document.getElementById('file-upload')?.click()
+  }, [currentSessionId])
+
   if (collapsed) {
     return (
       <div className="p-2">
         <input type="file" accept=".csv,.tsv,.xlsx,.xls,.json" className="hidden" id="file-upload-collapsed" onChange={handleUpload} />
         <button
-          disabled={!currentSessionId || uploading}
-          onClick={() => document.getElementById('file-upload-collapsed')?.click()}
-          className="w-10 h-10 rounded-xl flex items-center justify-center bg-white/30 dark:bg-white/5 border border-white/20 hover:bg-white/50 dark:hover:bg-white/10 transition-all"
+          disabled={uploading}
+          onClick={() => {
+            if (!currentSessionId) {
+              setError('请先创建一个会话')
+              setTimeout(() => setError(null), 3000)
+              return
+            }
+            document.getElementById('file-upload-collapsed')?.click()
+          }}
+          className={cn(
+            "w-10 h-10 rounded-xl flex items-center justify-center border transition-all",
+            currentSessionId
+              ? "bg-white/30 dark:bg-white/5 border-white/20 hover:bg-white/50 dark:hover:bg-white/10"
+              : "bg-gray-500/20 border-gray-500/30 cursor-not-allowed opacity-50"
+          )}
+          title={currentSessionId ? "上传数据文件" : "请先创建会话"}
         >
           📁
         </button>
+        {error && collapsed && (
+          <p className="mt-1 text-xs text-red-500 text-center">{error}</p>
+        )}
       </div>
     )
   }
@@ -205,11 +237,16 @@ function FileUploader({ collapsed }: { collapsed: boolean }) {
       <Button
         variant="outline"
         size="sm"
-        className="w-full bg-white/30 dark:bg-white/5 border-white/20"
-        disabled={!currentSessionId || uploading}
-        onClick={() => document.getElementById('file-upload')?.click()}
+        className={cn(
+          "w-full border-white/20",
+          currentSessionId
+            ? "bg-white/30 dark:bg-white/5"
+            : "bg-gray-500/10 dark:bg-gray-500/5"
+        )}
+        disabled={uploading}
+        onClick={handleButtonClick}
       >
-        {uploading ? '上传中...' : '上传数据文件'}
+        {uploading ? '上传中...' : currentSessionId ? '上传数据文件' : '请先创建会话'}
       </Button>
       {error && (
         <p className="mt-2 text-xs text-red-500 text-center">{error}</p>
