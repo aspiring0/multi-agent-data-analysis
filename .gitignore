@@ -21,13 +21,17 @@ env/
 # Environment
 .env
 
-# Data (keep sample, ignore uploads)
+# Data (keep sample, ignore uploads and generated files)
 data/uploads/
 data/outputs/
+data/storage/
 
 # OS
 .DS_Store
 Thumbs.db
+
+# Git worktrees
+.worktrees/
 
 # Pytest
 .pytest_cache/
