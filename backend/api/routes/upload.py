@@ -11,6 +11,7 @@ import logging
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, UploadFile
+from fastapi.responses import StreamingResponse
 
 from src.agents.data_parser import load_dataframe, build_dataset_meta
 from src.persistence.session_store import SessionStore
@@ -149,6 +150,128 @@ async def upload_multiple_files(session_id: str, files: list[UploadFile]):
             logger.warning(f"关系发现失败: {e}")
 
     return results
+
+
+@router.get("/{session_id}/list")
+async def list_files(session_id: str):
+    """获取会话的所有已上传文件列表"""
+    store = SessionStore()
+    if not store.get_session(session_id):
+        raise HTTPException(status_code=404, detail="会话不存在")
+
+    file_store = get_file_store()
+    files = file_store.list_session_files(session_id)
+    datasets = store.get_datasets(session_id)
+    dataset_map = {ds.get("file_storage_id"): ds for ds in datasets if ds.get("file_storage_id")}
+
+    result = []
+    for f in files:
+        file_id = f["id"]
+        ds = dataset_map.get(file_id, {})
+        result.append({
+            "id": file_id,
+            "filename": f["filename"],
+            "size_bytes": f["size_bytes"],
+            "rows": ds.get("num_rows", 0),
+            "columns": ds.get("num_cols", 0),
+            "uploaded_at": f["created_at"],
+            "is_active": False,
+        })
+
+    return {"files": result}
+
+
+@router.delete("/{session_id}/{file_id}")
+async def delete_file(session_id: str, file_id: str):
+    """删除指定文件"""
+    store = SessionStore()
+    if not store.get_session(session_id):
+        raise HTTPException(status_code=404, detail="会话不存在")
+
+    file_store = get_file_store()
+    file_info = file_store.get_file_info(file_id)
+
+    if not file_info or file_info["session_id"] != session_id:
+        raise HTTPException(status_code=404, detail="文件不存在")
+
+    try:
+        import sqlite3
+        conn = sqlite3.connect(file_store.db_path)
+        conn.execute("DELETE FROM file_storage WHERE id = ?", (file_id,))
+        conn.commit()
+        conn.close()
+
+        conn = sqlite3.connect(store.db_path)
+        conn.execute(
+            "DELETE FROM datasets WHERE session_id = ? AND json_extract(meta_json, '$.file_storage_id') = ?",
+            (session_id, file_id)
+        )
+        conn.commit()
+        conn.close()
+
+        logger.info(f"Deleted file: {file_id} from session {session_id}")
+        return {"success": True, "message": "文件已删除"}
+    except Exception as e:
+        logger.error(f"Failed to delete file {file_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"删除失败: {str(e)}")
+
+
+@router.get("/{session_id}/{file_id}/preview")
+async def preview_file(session_id: str, file_id: str, rows: int = 5):
+    """预览文件数据"""
+    store = SessionStore()
+    if not store.get_session(session_id):
+        raise HTTPException(status_code=404, detail="会话不存在")
+
+    file_store = get_file_store()
+    content = file_store.get_file(file_id)
+
+    if content is None:
+        raise HTTPException(status_code=404, detail="文件不存在")
+
+    datasets = store.get_datasets(session_id)
+    dataset = next((ds for ds in datasets if ds.get("file_storage_id") == file_id), None)
+
+    if not dataset:
+        raise HTTPException(status_code=404, detail="数据集元信息不存在")
+
+    df, err = load_dataframe_from_bytes(content, dataset.get("file_name", "data.csv"))
+    if df is None:
+        raise HTTPException(status_code=400, detail=f"文件解析失败: {err}")
+
+    preview_df = df.head(rows)
+    missing_values = df.isnull().sum().to_dict()
+
+    return {
+        "columns": list(df.columns),
+        "dtypes": {col: str(dtype) for col, dtype in df.dtypes.items()},
+        "preview_rows": preview_df.values.tolist()[:rows],
+        "missing_values": missing_values,
+    }
+
+
+@router.get("/{session_id}/{file_id}/download")
+async def download_file(session_id: str, file_id: str):
+    """下载文件"""
+    store = SessionStore()
+    if not store.get_session(session_id):
+        raise HTTPException(status_code=404, detail="会话不存在")
+
+    file_store = get_file_store()
+    file_info = file_store.get_file_info(file_id)
+
+    if not file_info or file_info["session_id"] != session_id:
+        raise HTTPException(status_code=404, detail="文件不存在")
+
+    content = file_store.get_file(file_id)
+    if content is None:
+        raise HTTPException(status_code=404, detail="文件内容不存在")
+
+    return StreamingResponse(
+        io.BytesIO(content),
+        media_type=file_info["mime_type"],
+        headers={"Content-Disposition": f'attachment; filename="{file_info["filename"]}"'}
+    )
 
 
 def load_dataframe_from_bytes(content: bytes, filename: str):
