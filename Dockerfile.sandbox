@@ -1,0 +1,53 @@
+# Docker沙箱镜像
+# 用于安全执行LLM生成的Python代码
+
+FROM python:3.11-slim-bookworm
+
+LABEL maintainer="multi-agent-data-analysis"
+LABEL description="Sandbox container for secure code execution"
+
+# 设置时区
+ENV TZ=Asia/Shanghai
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
+# 安装系统依赖（matplotlib需要）
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libfreetype6 \
+    libpng16-16 \
+    && rm -rf /var/lib/apt/lists/*
+
+# 安装数据分析依赖
+RUN pip install --no-cache-dir \
+    pandas==2.0.0 \
+    numpy==1.24.0 \
+    matplotlib==3.7.0 \
+    plotly==5.15.0 \
+    seaborn==0.12.0 \
+    scipy==1.11.0 \
+    scikit-learn==1.3.0 \
+    openpyxl==3.1.2
+
+# 创建非root用户
+RUN useradd -m -u 1000 -s /bin/bash sandbox
+
+# 创建必要的目录
+WORKDIR /sandbox
+RUN mkdir -p /sandbox/data /sandbox/outputs && \
+    chown -R sandbox:sandbox /sandbox
+
+# 复制入口脚本
+COPY sandbox_entry.py /sandbox/entry.py
+RUN chown sandbox:sandbox /sandbox/entry.py && \
+    chmod 444 /sandbox/entry.py
+
+# 切换到非root用户
+USER sandbox
+
+# 设置环境变量
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    MPLBACKEND=Agg \
+    PYTHONIOENCODING=utf-8
+
+# 入口点
+ENTRYPOINT ["python", "/sandbox/entry.py"]

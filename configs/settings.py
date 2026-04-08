@@ -21,8 +21,12 @@ class Settings:
     LLM_MAX_RETRIES: int = int(os.getenv("LLM_MAX_RETRIES", "2"))
 
     # ---- 沙箱配置 ----
+    SANDBOX_TYPE: str = os.getenv("SANDBOX_TYPE", "subprocess")  # "subprocess" | "docker"
     SANDBOX_TIMEOUT: int = int(os.getenv("SANDBOX_TIMEOUT", "30"))
-    SANDBOX_MAX_MEMORY_MB: int = int(os.getenv("SANDBOX_MAX_MEMORY_MB", "512"))
+    SANDBOX_MEMORY_MB: int = int(os.getenv("SANDBOX_MEMORY_MB", "512"))
+    SANDBOX_MAX_MEMORY_MB: int = int(os.getenv("SANDBOX_MAX_MEMORY_MB", "512"))  # 兼容旧配置名
+    SANDBOX_CPU_QUOTA: float = float(os.getenv("SANDBOX_CPU_QUOTA", "1.0"))
+    SANDBOX_IMAGE: str = os.getenv("SANDBOX_IMAGE", "multiagent-sandbox:latest")
 
     # ---- 数据库配置 ----
     POSTGRES_URI: str = os.getenv(

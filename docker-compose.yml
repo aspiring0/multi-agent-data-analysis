@@ -1,6 +1,16 @@
 
 
 services:
+  # Sandbox镜像构建（仅用于构建镜像，不运行服务）
+  sandbox:
+    build:
+      context: .
+      dockerfile: Dockerfile.sandbox
+    image: multiagent-sandbox:latest
+    container_name: multiagent-sandbox-build
+    # 仅用于构建镜像，不实际运行
+    command: ["echo", "Sandbox image ready"]
+
   # PostgreSQL 数据库
   postgres:
     image: postgres:16
