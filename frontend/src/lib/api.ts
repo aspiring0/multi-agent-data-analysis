@@ -120,3 +120,100 @@ export async function healthCheck(): Promise<boolean> {
     return false
   }
 }
+
+// ---- Upload with Progress ----
+
+export interface UploadProgressCallback {
+  onProgress?: (progress: number) => void
+  onSuccess?: (data: JsonData) => void
+  onError?: (error: string) => void
+}
+
+export function uploadFileWithProgress(
+  sessionId: string,
+  file: File,
+  callbacks: UploadProgressCallback = {},
+): Promise<ApiResponse<JsonData>> {
+  return new Promise((resolve) => {
+    const xhr = new XMLHttpRequest()
+    const formData = new FormData()
+    formData.append('file', file)
+
+    // Track upload progress
+    xhr.upload.addEventListener('progress', (e) => {
+      if (e.lengthComputable && callbacks.onProgress) {
+        const progress = Math.round((e.loaded / e.total) * 100)
+        callbacks.onProgress(progress)
+      }
+    })
+
+    xhr.addEventListener('load', () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          const data = JSON.parse(xhr.responseText)
+          callbacks.onSuccess?.(data)
+          resolve({ ok: true, data })
+        } catch {
+          callbacks.onError?.('解析响应失败')
+          resolve({ ok: false, data: null, error: '解析响应失败' })
+        }
+      } else {
+        try {
+          const err = JSON.parse(xhr.responseText)
+          const error = err.detail || xhr.statusText
+          callbacks.onError?.(error)
+          resolve({ ok: false, data: null, error })
+        } catch {
+          callbacks.onError?.(xhr.statusText)
+          resolve({ ok: false, data: null, error: xhr.statusText })
+        }
+      }
+    })
+
+    xhr.addEventListener('error', () => {
+      const error = '网络错误，请检查连接'
+      callbacks.onError?.(error)
+      resolve({ ok: false, data: null, error })
+    })
+
+    xhr.open('POST', `${API_BASE}/api/upload/${sessionId}`)
+    xhr.send(formData)
+  })
+}
+
+// ---- File Management API ----
+
+export async function listUploadedFiles(sessionId: string): Promise<ApiResponse<JsonData[]>> {
+  const res = await fetch(`${API_BASE}/api/upload/${sessionId}/list`)
+  if (!res.ok) {
+    return { ok: false, data: null, error: res.statusText }
+  }
+  const data = await res.json()
+  return { ok: true, data: data.files }
+}
+
+export async function deleteUploadedFile(sessionId: string, fileId: string): Promise<ApiResponse<JsonData>> {
+  const res = await fetch(`${API_BASE}/api/upload/${sessionId}/${fileId}`, {
+    method: 'DELETE',
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    return { ok: false, data: null, error: err.detail }
+  }
+  const data = await res.json()
+  return { ok: true, data }
+}
+
+export async function previewUploadedFile(sessionId: string, fileId: string, rows: number = 5): Promise<ApiResponse<JsonData>> {
+  const res = await fetch(`${API_BASE}/api/upload/${sessionId}/${fileId}/preview?rows=${rows}`)
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    return { ok: false, data: null, error: err.detail }
+  }
+  const data = await res.json()
+  return { ok: true, data }
+}
+
+export function getDownloadUrl(sessionId: string, fileId: string): string {
+  return `${API_BASE}/api/upload/${sessionId}/${fileId}/download`
+}
