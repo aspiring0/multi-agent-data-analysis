@@ -1,12 +1,14 @@
 'use client'
 
-import { useState, useCallback, useMemo } from 'react'
-import { useAppStore, type DatasetMeta } from '@/lib/store'
+import { useState, useCallback, useMemo, useEffect } from 'react'
+import { useAppStore, type DatasetMeta, type UploadedFileMeta } from '@/lib/store'
 import * as api from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { UploadProgress } from '@/components/upload/UploadProgress'
+import { FileList } from '@/components/sidebar/FileList'
 
 function SessionList({ collapsed }: { collapsed: boolean }) {
   const sessions = useAppStore((s) => s.sessions)
@@ -157,8 +159,22 @@ function SessionList({ collapsed }: { collapsed: boolean }) {
 function FileUploader({ collapsed }: { collapsed: boolean }) {
   const currentSessionId = useAppStore((s) => s.currentSessionId)
   const addDataset = useAppStore((s) => s.addDataset)
-  const [uploading, setUploading] = useState(false)
+  const uploadProgress = useAppStore((s) => s.uploadProgress)
+  const setUploadProgress = useAppStore((s) => s.setUploadProgress)
+  const clearUploadProgress = useAppStore((s) => s.clearUploadProgress)
+  const setUploadedFiles = useAppStore((s) => s.setUploadedFiles)
   const [error, setError] = useState<string | null>(null)
+
+  // Load file list when session changes
+  useEffect(() => {
+    if (currentSessionId) {
+      api.listUploadedFiles(currentSessionId).then((res) => {
+        if (res.ok && res.data) {
+          setUploadedFiles(res.data as UploadedFileMeta[])
+        }
+      })
+    }
+  }, [currentSessionId, setUploadedFiles])
 
   const handleUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -171,25 +187,40 @@ function FileUploader({ collapsed }: { collapsed: boolean }) {
       return
     }
 
-    setUploading(true)
+    const tempId = `temp-${Date.now()}`
+    setUploadProgress(tempId, { fileName: file.name, progress: 0, status: 'uploading' })
     setError(null)
 
     try {
-      const res = await api.uploadFile(currentSessionId, file)
-      if (res.ok && res.data) {
-        addDataset(currentSessionId, res.data as DatasetMeta)
-      } else {
-        setError(res.error || '上传失败')
-        setTimeout(() => setError(null), 3000)
+      const res = await api.uploadFileWithProgress(currentSessionId, file, {
+        onProgress: (progress) => {
+          setUploadProgress(tempId, { fileName: file.name, progress, status: 'uploading' })
+        },
+        onSuccess: async (data) => {
+          setUploadProgress(tempId, { fileName: file.name, progress: 100, status: 'success' })
+          addDataset(currentSessionId, data as DatasetMeta)
+          // Refresh file list
+          const filesRes = await api.listUploadedFiles(currentSessionId)
+          if (filesRes.ok && filesRes.data) {
+            setUploadedFiles(filesRes.data as UploadedFileMeta[])
+          }
+          // Clear progress after 2 seconds
+          setTimeout(() => clearUploadProgress(tempId), 2000)
+        },
+        onError: (errMsg) => {
+          setUploadProgress(tempId, { fileName: file.name, progress: 0, status: 'error', errorMessage: errMsg })
+        },
+      })
+
+      if (!res.ok) {
+        setUploadProgress(tempId, { fileName: file.name, progress: 0, status: 'error', errorMessage: res.error || '上传失败' })
       }
     } catch (err) {
-      setError('上传失败，请检查网络连接')
-      setTimeout(() => setError(null), 3000)
+      setUploadProgress(tempId, { fileName: file.name, progress: 0, status: 'error', errorMessage: '上传失败，请检查网络连接' })
     } finally {
-      setUploading(false)
       e.target.value = ''
     }
-  }, [currentSessionId, addDataset])
+  }, [currentSessionId, addDataset, setUploadProgress, clearUploadProgress, setUploadedFiles])
 
   const handleButtonClick = useCallback(() => {
     if (!currentSessionId) {
@@ -200,12 +231,16 @@ function FileUploader({ collapsed }: { collapsed: boolean }) {
     document.getElementById('file-upload')?.click()
   }, [currentSessionId])
 
+  // Get progress entries for rendering
+  const progressEntries = Object.entries(uploadProgress)
+  const isUploading = Object.values(uploadProgress).some(p => p.status === 'uploading')
+
   if (collapsed) {
     return (
       <div className="p-2">
         <input type="file" accept=".csv,.tsv,.xlsx,.xls,.json" className="hidden" id="file-upload-collapsed" onChange={handleUpload} />
         <button
-          disabled={uploading}
+          disabled={isUploading}
           onClick={() => {
             if (!currentSessionId) {
               setError('请先创建一个会话')
@@ -232,7 +267,7 @@ function FileUploader({ collapsed }: { collapsed: boolean }) {
   }
 
   return (
-    <div className="p-3">
+    <div className="p-3 space-y-2">
       <input type="file" accept=".csv,.tsv,.xlsx,.xls,.json" className="hidden" id="file-upload" onChange={handleUpload} />
       <Button
         variant="outline"
@@ -243,13 +278,33 @@ function FileUploader({ collapsed }: { collapsed: boolean }) {
             ? "bg-white/30 dark:bg-white/5"
             : "bg-gray-500/10 dark:bg-gray-500/5"
         )}
-        disabled={uploading}
+        disabled={isUploading}
         onClick={handleButtonClick}
       >
-        {uploading ? '上传中...' : currentSessionId ? '上传数据文件' : '请先创建会话'}
+        {isUploading
+          ? '上传中...'
+          : currentSessionId
+            ? '上传数据文件'
+            : '请先创建会话'}
       </Button>
+
+      {/* Upload progress indicators */}
+      {progressEntries.map(([tempId, progress]) => (
+        <UploadProgress
+          key={tempId}
+          fileName={progress.fileName}
+          progress={progress.progress}
+          status={progress.status}
+          errorMessage={progress.errorMessage}
+          onRetry={progress.status === 'error' ? () => {
+            clearUploadProgress(tempId)
+            document.getElementById('file-upload')?.click()
+          } : undefined}
+        />
+      ))}
+
       {error && (
-        <p className="mt-2 text-xs text-red-500 text-center">{error}</p>
+        <p className="text-xs text-red-500 text-center">{error}</p>
       )}
     </div>
   )
@@ -258,6 +313,7 @@ function FileUploader({ collapsed }: { collapsed: boolean }) {
 export function CollapsibleSidebar() {
   const [collapsed, setCollapsed] = useState(true)
   const createSession = useAppStore((s) => s.createSession)
+  const currentSessionId = useAppStore((s) => s.currentSessionId)
   const [error, setError] = useState<string | null>(null)
 
   const handleNewSession = useCallback(async () => {
@@ -334,6 +390,11 @@ export function CollapsibleSidebar() {
 
       {/* File upload */}
       <FileUploader collapsed={collapsed} />
+
+      <div className={cn('h-px bg-white/10 dark:bg-white/5', collapsed && 'mx-2')} />
+
+      {/* Uploaded files list */}
+      <FileList collapsed={collapsed} sessionId={currentSessionId} />
     </div>
   )
 }
