@@ -94,6 +94,18 @@ export interface AppStore {
   addExecutionLog: (entry: ExecutionLogEntry) => void
   clearExecutionLog: () => void
 
+  // Upload state
+  uploadProgress: Record<string, UploadProgress>
+  uploadedFiles: UploadedFileMeta[]
+  activeFileId: string | null
+
+  // Upload actions
+  setUploadProgress: (tempId: string, progress: UploadProgress) => void
+  clearUploadProgress: (tempId: string) => void
+  setUploadedFiles: (files: UploadedFileMeta[]) => void
+  setActiveFileId: (fileId: string | null) => void
+  removeUploadedFile: (fileId: string) => void
+
   // Hydration from API
   loadSessionFromApi: (session: Session) => void
 }
@@ -108,6 +120,23 @@ export interface ExecutionLogEntry {
   content?: string
 }
 
+export interface UploadProgress {
+  fileName: string
+  progress: number
+  status: 'uploading' | 'success' | 'error'
+  errorMessage?: string
+}
+
+export interface UploadedFileMeta {
+  id: string
+  filename: string
+  size_bytes: number
+  rows: number
+  columns: number
+  uploaded_at: string
+  is_active: boolean
+}
+
 export const useAppStore = create<AppStore>()(
   persist(
     (set, get) => ({
@@ -120,6 +149,9 @@ export const useAppStore = create<AppStore>()(
       currentAgentDisplay: null,
       currentSkill: null,
       currentSkillDisplay: null,
+      uploadProgress: {},
+      uploadedFiles: [],
+      activeFileId: null,
 
       // ---- Session actions ----
 
@@ -360,6 +392,32 @@ export const useAppStore = create<AppStore>()(
         })),
       clearExecutionLog: () => set({ executionLog: [] }),
 
+      // ---- Upload actions ----
+
+      setUploadProgress: (tempId, progress) =>
+        set((state) => ({
+          uploadProgress: {
+            ...state.uploadProgress,
+            [tempId]: progress,
+          },
+        })),
+
+      clearUploadProgress: (tempId) =>
+        set((state) => {
+          const { [tempId]: _, ...rest } = state.uploadProgress
+          return { uploadProgress: rest }
+        }),
+
+      setUploadedFiles: (files) => set({ uploadedFiles: files }),
+
+      setActiveFileId: (fileId) => set({ activeFileId: fileId }),
+
+      removeUploadedFile: (fileId) =>
+        set((state) => ({
+          uploadedFiles: state.uploadedFiles.filter((f) => f.id !== fileId),
+          activeFileId: state.activeFileId === fileId ? null : state.activeFileId,
+        })),
+
       // ---- Hydration ----
 
       loadSessionFromApi: (session) =>
@@ -375,6 +433,7 @@ export const useAppStore = create<AppStore>()(
       partialize: (state) => ({
         sessions: state.sessions,
         currentSessionId: state.currentSessionId,
+        activeFileId: state.activeFileId,
       }),
     },
   ),
